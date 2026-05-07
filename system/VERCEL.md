@@ -8,7 +8,7 @@
 
 ## هيكل المشروع
 
-### مستودع الجذر فيه مجلد `system/` (مثل `POS MiniZoo` على GitHub)
+### مستودع الجذر فيه مجلد `system/` (أي اسم مشروع)
 
 عيّن في Vercel **Settings → General → Root Directory** القيمة **`system`** (لتشغيل **API** و`api/[...slug].js`). إن تركت الجذر `.` فسيُقرأ `vercel.json` من جذر المستودع (البناء فقط؛ الـ API قد لا يعمل إلا مع Root = `system`).
 

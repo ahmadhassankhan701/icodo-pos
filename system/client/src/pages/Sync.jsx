@@ -14,6 +14,8 @@ export default function Sync() {
   const [apiKey, setApiKey] = useState("");
   const [inventoryWebhookUrl, setInventoryWebhookUrl] = useState("");
   const [msg, setMsg] = useState("");
+  const [skippedPreview, setSkippedPreview] = useState([]);
+  const [skippedCopyHint, setSkippedCopyHint] = useState("");
   const [loading, setLoading] = useState(false);
   const [generatedKey, setGeneratedKey] = useState("");
   const [copyHint, setCopyHint] = useState("");
@@ -103,12 +105,21 @@ export default function Sync() {
   const syncProducts = async () => {
     setLoading(true);
     setMsg("");
+    setSkippedPreview([]);
     try {
       const r = await api("/api/sync/products", { method: "POST" });
-      setMsg(t("sync.msgProducts", { n: r.upserted, at: r.at }));
+      setSkippedPreview(Array.isArray(r.skippedItems) ? r.skippedItems : []);
+      setMsg(
+        t("sync.msgProducts", {
+          n: r.upserted,
+          s: r.skipped ?? 0,
+          at: r.at,
+        })
+      );
       await load();
     } catch (x) {
       setMsg(x.message || t("sync.syncFailed"));
+      setSkippedPreview([]);
     } finally {
       setLoading(false);
     }
@@ -178,6 +189,40 @@ export default function Sync() {
     (m.includes("فشل") ||
       m.toLowerCase().includes("fail") ||
       m.toLowerCase().includes("error"));
+
+  const copySkippedAsJson = async () => {
+    if (!skippedPreview.length) return;
+    try {
+      const text = JSON.stringify(skippedPreview, null, 2);
+      await navigator.clipboard.writeText(text);
+      setSkippedCopyHint(t("sync.copiedJson"));
+      setTimeout(() => setSkippedCopyHint(""), 2000);
+    } catch {
+      setSkippedCopyHint("");
+    }
+  };
+
+  const copySkippedAsCsv = async () => {
+    if (!skippedPreview.length) return;
+    const escapeCsv = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["externalId", "barcode", "sku", "reason"];
+    const rows = skippedPreview.map((it) => [
+      it.externalId ?? "",
+      it.barcode ?? "",
+      it.sku ?? "",
+      it.reason ?? "",
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(csv);
+      setSkippedCopyHint(t("sync.copiedCsv"));
+      setTimeout(() => setSkippedCopyHint(""), 2000);
+    } catch {
+      setSkippedCopyHint("");
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
@@ -318,6 +363,63 @@ export default function Sync() {
           {t("sync.btnOrders")}
         </button>
       </div>
+
+      {skippedPreview.length ? (
+        <div className="card" style={{ display: "grid", gap: 10 }}>
+          <strong>
+            {t("sync.skippedTitle", { n: String(skippedPreview.length) })}
+          </strong>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="btn-touch"
+              onClick={copySkippedAsJson}
+              style={{ background: "var(--surface2)", color: "var(--text)" }}
+            >
+              {t("sync.copySkippedJson")}
+            </button>
+            <button
+              type="button"
+              className="btn-touch"
+              onClick={copySkippedAsCsv}
+              style={{ background: "var(--surface2)", color: "var(--text)" }}
+            >
+              {t("sync.copySkippedCsv")}
+            </button>
+            {skippedCopyHint ? (
+              <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>
+                {skippedCopyHint}
+              </span>
+            ) : null}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ color: "var(--muted)", textAlign: "start" }}>
+                  <th style={th}>{t("sync.colExternalId")}</th>
+                  <th style={th}>{t("sync.colBarcode")}</th>
+                  <th style={th}>{t("sync.colSku")}</th>
+                  <th style={th}>{t("sync.colReason")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {skippedPreview.map((it, idx) => (
+                  <tr key={`${it.externalId || "noid"}-${idx}`}>
+                    <td style={td}>{it.externalId || "—"}</td>
+                    <td style={td}>{it.barcode || "—"}</td>
+                    <td style={td}>{it.sku || "—"}</td>
+                    <td style={td}>
+                      {it.reason === "duplicate_unique_field"
+                        ? t("sync.reasonDuplicate")
+                        : String(it.reason || "—")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -329,3 +431,5 @@ const inp = {
   background: "var(--bg)",
   color: "var(--text)",
 };
+const th = { padding: "8px 6px", borderBottom: "1px solid var(--border)" };
+const td = { padding: "8px 6px", borderBottom: "1px solid var(--border)" };

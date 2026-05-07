@@ -614,7 +614,7 @@ router.post("/checkout", async (req, res) => {
       }
 
       return created;
-    });
+    }, { maxWait: 10000, timeout: 60000 });
 
     await writeAudit({
       userId: req.user.sub,
@@ -766,7 +766,7 @@ router.post("/:saleId/confirm-delivery", async (req, res) => {
           coupon: true,
         },
       });
-    });
+    }, { maxWait: 10000, timeout: 60000 });
 
     res.json(out);
   } catch (e) {

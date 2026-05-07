@@ -15,7 +15,7 @@ function ezooImageUrl(item) {
 }
 
 /**
- * جلب المنتجات من API تطبيق ezoo (ميني زو).
+ * جلب المنتجات من API مزود خارجي.
  * يتطلب nationality_id — الافتراضي 1 (قطر). اضبط EZOO_NATIONALITY_ID في server/.env إن لزم.
  */
 export async function syncProductsFromEzoo(organizationId) {

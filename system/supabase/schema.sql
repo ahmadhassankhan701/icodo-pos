@@ -36,7 +36,7 @@ create table if not exists public.products (
   price numeric not null default 0,
   cost numeric,
   pet_type text default 'OTHER',
-  -- مثال ميني زو: https://d3g5vfdhxupk5f.cloudfront.net/products/<uuid>.webp
+  -- مثال عام: https://cdn.example.com/products/<uuid>.webp
   image_url text, -- رابط https كامل أو مسار نسبي + PUBLIC_IMAGE_BASE_URL / SUPABASE_PUBLIC_IMAGE_PREFIX في server/.env
   brand_id uuid references public.brands (id) on delete set null,
   category_id uuid references public.categories (id) on delete set null,

@@ -9,8 +9,8 @@ export default function Login() {
   const { theme, toggleTheme } = useTheme();
   const { t, locale, setLocale } = useI18n();
   const nav = useNavigate();
-  const [email, setEmail] = useState("admin@petstore.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [organizationSlug, setOrganizationSlug] = useState("");
   const [err, setErr] = useState("");
   /** بصمة آمنة من السيرفر عند فشل اتصال قاعدة البيانات (503) */

@@ -5,10 +5,10 @@ const STORAGE_KEY = "petstore-theme";
 const ThemeContext = createContext(null);
 
 function getPreferredTheme() {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved === "light" || saved === "dark") return saved;
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  return "light";
 }
 
 export function ThemeProvider({ children }) {

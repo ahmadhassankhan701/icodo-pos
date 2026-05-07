@@ -16,7 +16,7 @@ const emptyForm = {
   channel: "WHATSAPP",
   cooldownDays: "14",
   criteriaDays: "45",
-  messageTemplate: "Hi {{name}}, we miss you at MiniZoo. Book now and enjoy a special offer.",
+  messageTemplate: "Hi {{name}}, we miss you. Book now and enjoy a special offer.",
 };
 
 export default function Automations() {

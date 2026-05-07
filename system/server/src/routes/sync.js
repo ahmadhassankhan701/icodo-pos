@@ -81,7 +81,7 @@ router.post("/products", async (req, res) => {
   }
 });
 
-/** منتجات من API تطبيق ezoo (ميني زو) — GET get-products?nationality_id= */
+/** منتجات من API مزود خارجي — GET get-products?nationality_id= */
 router.post("/ezoo-products", async (req, res) => {
   try {
     const result = await syncProductsFromEzoo(req.user.organizationId);

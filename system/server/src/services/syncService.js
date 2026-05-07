@@ -75,33 +75,11 @@ export async function syncProductsFromWebsite(organizationId) {
   if (!cfg.websiteBaseUrl || !key) {
     throw new Error("يجب حفظ عنوان الموقع و API Key أولاً");
   }
-  const url = `${cfg.websiteBaseUrl.replace(/\/$/, "")}/api/products`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${key}`,
-      Accept: "application/json",
-    },
-  });
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = (await res.text()).trim().slice(0, 400);
-    } catch {
-      /* ignore */
-    }
-    const err = new Error(
-      res.status === 401
-        ? "الموقع رفض المفتاح (401). انسخ مفتاح API من زر «توليد» أو احفظ المفتاح يدوياً ثم ضع نفس القيمة بالضبط في متغير البيئة بالمتجر (مثل POS_SYNC_API_KEY) بدون مسافات إضافية، وأعد تشغيل خادم المتجر."
-        : res.status === 404
-          ? `المسار غير موجود (404): ${url} — تأكد أن خادم المتجر يعرض GET /api/products على هذا العنوان.`
-          : `فشل جلب المنتجات: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`
-    );
-    err.statusCode = res.status;
-    throw err;
-  }
-  const data = await res.json();
-  const list = Array.isArray(data) ? data : data.products || data.data || [];
+  const provider = detectProvider(cfg.websiteBaseUrl, key);
+  const list = await fetchProductsByProvider(provider, cfg.websiteBaseUrl, key);
   let upserted = 0;
+  let skipped = 0;
+  const skippedItems = [];
   for (const item of list) {
     const extId = String(item.id ?? item.externalId ?? "");
     if (!extId) continue;
@@ -131,33 +109,54 @@ export async function syncProductsFromWebsite(organizationId) {
       imageUrl: extractProductImageUrl(item),
       externalId: extId,
     };
-    if (existing) {
-      await prisma.product.update({
-        where: { id: existing.id },
-        data: {
-          name: base.name,
-          nameEn: base.nameEn,
-          description: base.description,
-          sku: base.sku,
+    try {
+      if (existing) {
+        await prisma.product.update({
+          where: { id: existing.id },
+          data: {
+            name: base.name,
+            nameEn: base.nameEn,
+            description: base.description,
+            sku: base.sku,
+            barcode: base.barcode,
+            price: base.price,
+            cost: base.cost,
+            petType: base.petType,
+            imageUrl: base.imageUrl,
+          },
+        });
+      } else {
+        await prisma.product.create({
+          data: { ...base, organizationId },
+        });
+      }
+      upserted++;
+    } catch (e) {
+      const isUniqueConflict =
+        e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+      if (!isUniqueConflict) throw e;
+      skipped++;
+      if (skippedItems.length < 20) {
+        skippedItems.push({
+          externalId: extId,
           barcode: base.barcode,
-          price: base.price,
-          cost: base.cost,
-          petType: base.petType,
-          imageUrl: base.imageUrl,
-        },
-      });
-    } else {
-      await prisma.product.create({
-        data: { ...base, organizationId },
-      });
+          sku: base.sku,
+          reason: "duplicate_unique_field",
+        });
+      }
     }
-    upserted++;
   }
   await prisma.syncSettings.update({
     where: { organizationId },
     data: { lastProductSyncAt: new Date() },
   });
-  return { upserted, at: new Date().toISOString() };
+  return {
+    upserted,
+    skipped,
+    skippedItems,
+    provider,
+    at: new Date().toISOString(),
+  };
 }
 
 /** رابط صورة من JSON الموقع — ليس رفع ملفات، فقط نسخ URL */
@@ -208,6 +207,154 @@ function mapPetType(raw) {
   return "OTHER";
 }
 
+function detectProvider(baseUrl, apiKey) {
+  const host = (() => {
+    try {
+      return new URL(String(baseUrl || "")).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  const key = String(apiKey || "");
+  if (host.endsWith(".myshopify.com")) return "shopify";
+  if (key.includes(":") && key.toLowerCase().includes("ck_")) return "woocommerce";
+  return "generic";
+}
+
+function toNumber(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+async function readJsonOrThrow(res, hintPrefix) {
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.text()).trim().slice(0, 400);
+    } catch {}
+    const err = new Error(`${hintPrefix}: HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
+    err.statusCode = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+async function fetchProductsByProvider(provider, baseUrl, apiKey) {
+  const normalized = String(baseUrl || "").replace(/\/$/, "");
+  if (provider === "shopify") {
+    const res = await fetch(
+      `${normalized}/admin/api/2024-10/products.json?status=active&limit=250`,
+      {
+        headers: {
+          "X-Shopify-Access-Token": apiKey,
+          Accept: "application/json",
+        },
+      }
+    );
+    const data = await readJsonOrThrow(res, "فشل جلب منتجات Shopify");
+    const products = Array.isArray(data?.products) ? data.products : [];
+    return products.map((p) => {
+      const firstVar = Array.isArray(p.variants) ? p.variants[0] || {} : {};
+      const firstImg = Array.isArray(p.images) ? p.images[0] : null;
+      return {
+        id: p.id,
+        externalId: p.id,
+        name: p.title,
+        description: p.body_html || null,
+        sku: firstVar?.sku || null,
+        barcode: firstVar?.barcode || null,
+        price: toNumber(firstVar?.price, 0),
+        imageUrl: firstImg?.src || p.image?.src || null,
+        category: Array.isArray(p.product_type) ? p.product_type[0] : p.product_type,
+      };
+    });
+  }
+
+  if (provider === "woocommerce") {
+    const [ck, cs] = String(apiKey || "").split(":", 2);
+    if (!ck || !cs) {
+      throw new Error("مفتاح WooCommerce يجب أن يكون بالشكل: ck_xxx:cs_xxx");
+    }
+    const qp = new URLSearchParams({
+      consumer_key: ck.trim(),
+      consumer_secret: cs.trim(),
+      per_page: "100",
+      status: "publish",
+    });
+    const res = await fetch(`${normalized}/wp-json/wc/v3/products?${qp.toString()}`, {
+      headers: { Accept: "application/json" },
+    });
+    const data = await readJsonOrThrow(res, "فشل جلب منتجات WooCommerce");
+    const products = Array.isArray(data) ? data : [];
+    return products.map((p) => ({
+      id: p.id,
+      externalId: p.id,
+      name: p.name,
+      description: p.description || p.short_description || null,
+      sku: p.sku || null,
+      barcode: p.meta_data?.find?.((m) => m?.key === "barcode")?.value || null,
+      price: toNumber(p.regular_price || p.price, 0),
+      imageUrl: Array.isArray(p.images) && p.images[0] ? p.images[0].src : null,
+      category: Array.isArray(p.categories) && p.categories[0] ? p.categories[0].name : null,
+    }));
+  }
+
+  const res = await fetch(`${normalized}/api/products`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+    },
+  });
+  const data = await readJsonOrThrow(
+    res,
+    "فشل جلب المنتجات من واجهة الموقع"
+  );
+  return Array.isArray(data) ? data : data.products || data.data || [];
+}
+
+async function fetchOrdersByProvider(provider, baseUrl, apiKey) {
+  const normalized = String(baseUrl || "").replace(/\/$/, "");
+  if (provider === "shopify") {
+    const res = await fetch(
+      `${normalized}/admin/api/2024-10/orders.json?status=open&fulfillment_status=unfulfilled&limit=100`,
+      {
+        headers: {
+          "X-Shopify-Access-Token": apiKey,
+          Accept: "application/json",
+        },
+      }
+    );
+    const data = await readJsonOrThrow(res, "فشل جلب طلبات Shopify");
+    return Array.isArray(data?.orders) ? data.orders : [];
+  }
+
+  if (provider === "woocommerce") {
+    const [ck, cs] = String(apiKey || "").split(":", 2);
+    if (!ck || !cs) {
+      throw new Error("مفتاح WooCommerce يجب أن يكون بالشكل: ck_xxx:cs_xxx");
+    }
+    const qp = new URLSearchParams({
+      consumer_key: ck.trim(),
+      consumer_secret: cs.trim(),
+      per_page: "100",
+      status: "processing,on-hold,pending",
+    });
+    const res = await fetch(`${normalized}/wp-json/wc/v3/orders?${qp.toString()}`, {
+      headers: { Accept: "application/json" },
+    });
+    const data = await readJsonOrThrow(res, "فشل جلب طلبات WooCommerce");
+    return Array.isArray(data) ? data : [];
+  }
+
+  const res = await fetch(`${normalized}/api/orders/pending`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+    },
+  });
+  return readJsonOrThrow(res, "فشل مزامنة الطلبات من واجهة الموقع");
+}
+
 /**
  * دفع الطلبات المحلية للموقع أو سحب طلبات جديدة — حسب تصميم API لديك
  */
@@ -217,19 +364,16 @@ export async function syncOrdersWithWebsite(organizationId) {
   if (!cfg.websiteBaseUrl || !key) {
     throw new Error("يجب حفظ عنوان الموقع و API Key أولاً");
   }
-  const url = `${cfg.websiteBaseUrl.replace(/\/$/, "")}/api/orders/pending`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${key}`,
-      Accept: "application/json",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`فشل مزامنة الطلبات: HTTP ${res.status}`);
-  }
+  const provider = detectProvider(cfg.websiteBaseUrl, key);
+  const pulled = await fetchOrdersByProvider(provider, cfg.websiteBaseUrl, key);
   await prisma.syncSettings.update({
     where: { organizationId },
     data: { lastOrderSyncAt: new Date() },
   });
-  return { message: "تم تسجيل وقت المزامنة (عدّل المنطق حسب API الموقع)", at: new Date().toISOString() };
+  return {
+    message: "تم تسجيل وقت مزامنة الطلبات",
+    provider,
+    pulledCount: Array.isArray(pulled) ? pulled.length : 0,
+    at: new Date().toISOString(),
+  };
 }
