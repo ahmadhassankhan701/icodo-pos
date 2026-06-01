@@ -1,4 +1,4 @@
-/** CommonJS + dynamic import — جذر المستودع (Root Directory = .) */
+/** CommonJS (see api/package.json) + dynamic import() لتجنب ERR_REQUIRE_ESM */
 let app;
 
 function ensureApiPrefix(req) {
@@ -14,8 +14,8 @@ function ensureApiPrefix(req) {
 
 async function getApp() {
   if (!app) {
-    await import("../system/server/src/loadEnv.js");
-    const mod = await import("../system/server/src/app.js");
+    await import("../server/src/loadEnv.js");
+    const mod = await import("../server/src/app.js");
     app = mod.default;
   }
   return app;

@@ -1,4 +1,4 @@
-/** CommonJS + dynamic import — يتجنب ERR_REQUIRE_ESM على Vercel */
+/** CommonJS — جذر المستودع عند Root Directory = . */
 let app;
 
 function ensureApiPrefix(req) {
@@ -14,8 +14,8 @@ function ensureApiPrefix(req) {
 
 async function getApp() {
   if (!app) {
-    await import("../server/src/loadEnv.js");
-    const mod = await import("../server/src/app.js");
+    await import("../system/server/src/loadEnv.js");
+    const mod = await import("../system/server/src/app.js");
     app = mod.default;
   }
   return app;
