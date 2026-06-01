@@ -5,7 +5,7 @@
   "buildCommand": "npm run build:vercel --prefix system",
   "outputDirectory": "system/client/dist",
   "functions": {
-    "api/[...slug].js": {
+    "api/[...slug].cjs": {
       "maxDuration": 60,
       "memory": 1024,
       "includeFiles": "system/server/node_modules/.prisma/**"

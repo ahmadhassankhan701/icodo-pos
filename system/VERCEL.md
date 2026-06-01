@@ -107,4 +107,6 @@ npx vercel --prod
 - `vercel.json` يضمّن `server/node_modules/.prisma/**` داخل دالة الـ API.
 - مع قواعد بعيدة يُنصح بـ **connection pooling** (مثلاً Supabase Transaction pooler في `DATABASE_URL` مع `?pgbouncer=true` إن طلبت الوثائق).
 
-إن ظهر **FUNCTION_INVOCATION_FAILED** أو 500 على `/api/health`: راجع **Functions → Logs** وتأكد من `DATABASE_URL` و`JWT_SECRET` في متغيرات Vercel (Production).
+إن ظهر **FUNCTION_INVOCATION_FAILED** أو **ERR_REQUIRE_ESM** في السجلات: تأكد أن دالة الـ API هي `api/[...slug].cjs` (استيراد ديناميكي لـ Express ESM)، وليس `.js` مع `import` ثابت.
+
+إن استمر 500 على `/api/health`: راجع **Functions → Logs** وتأكد من `DATABASE_URL` و`JWT_SECRET` في متغيرات Vercel (Production).
