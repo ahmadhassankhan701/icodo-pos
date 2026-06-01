@@ -232,6 +232,16 @@ const entries = [
   ["dashboard.tooltipProfit", "ربح", "Profit"],
   ["dashboard.print", "طباعة التقرير", "Print report"],
   ["dashboard.printHint", "طباعة الإحصائيات والرسوم حسب حجم الورق في إعدادات الطباعة", "Print stats and charts using the paper size in print settings"],
+  ["dashboard.topProductsMonth", "أفضل 10 منتجات (الشهر)", "Top 10 products of the month"],
+  ["dashboard.topCustomersMonth", "أفضل 10 زبائن (الشهر)", "Top 10 customers of the month"],
+  ["dashboard.topServicesMonth", "أفضل 10 خدمات (الشهر)", "Top 10 services of the month"],
+  ["dashboard.topTenEmpty", "لا توجد بيانات لهذا الشهر", "No data for this month"],
+  ["dashboard.topProductsMetric", "مبيعات", "Sales"],
+  ["dashboard.topProductsQty", "{{count}} وحدة", "{{count}} units"],
+  ["dashboard.topCustomersMetric", "إجمالي المشتريات", "Total spent"],
+  ["dashboard.topCustomersOrders", "{{count}} فاتورة", "{{count}} orders"],
+  ["dashboard.topServicesMetric", "إيراد تقديري", "Est. revenue"],
+  ["dashboard.topServicesCount", "{{count}} موعد", "{{count}} appointments"],
 
   ["nav.printSettings", "إعدادات الطباعة", "Print settings"],
 

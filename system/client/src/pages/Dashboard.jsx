@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { api } from "../api/client.js";
 import { DashboardCard } from "../components/DashboardCard.jsx";
+import { TopTenList } from "../components/TopTenList.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { branchDisplayName } from "../utils/displayLabels.js";
@@ -28,6 +29,9 @@ export default function Dashboard() {
   const [byProduct, setByProduct] = useState([]);
   const [byBranch, setByBranch] = useState([]);
   const [monthly, setMonthly] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [topCustomers, setTopCustomers] = useState([]);
+  const [topServices, setTopServices] = useState([]);
 
   useEffect(() => {
     api("/api/branches").then(setBranches).catch(() => {});
@@ -36,14 +40,20 @@ export default function Dashboard() {
   useEffect(() => {
     const q = branchId ? `?branchId=${branchId}` : "";
     const run = async () => {
-      const [s, p, m] = await Promise.all([
+      const [s, p, m, tp, tc, ts] = await Promise.all([
         api(`/api/dashboard/summary${q}`),
         api(`/api/dashboard/sales-by-product${q}`),
         api(`/api/dashboard/monthly-profit${q}`),
+        api(`/api/dashboard/top-products-month${q}`),
+        api(`/api/dashboard/top-customers-month${q}`),
+        api(`/api/dashboard/top-services-month${q}`),
       ]);
       setSummary(s);
       setByProduct(p);
       setMonthly(m);
+      setTopProducts(Array.isArray(tp) ? tp : []);
+      setTopCustomers(Array.isArray(tc) ? tc : []);
+      setTopServices(Array.isArray(ts) ? ts : []);
       if (user?.role === "ADMIN") {
         const b = await api("/api/dashboard/sales-by-branch");
         setByBranch(b);
@@ -208,6 +218,54 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 16,
+        }}
+      >
+        <TopTenList
+          title={t("dashboard.topProductsMonth")}
+          emptyLabel={t("dashboard.topTenEmpty")}
+          metricLabel={t("dashboard.topProductsMetric")}
+          rows={topProducts.map((r) => ({
+            rank: r.rank,
+            name: r.name,
+            sub:
+              r.quantity != null
+                ? t("dashboard.topProductsQty", { count: String(r.quantity) })
+                : undefined,
+            value: cur(r.value),
+          }))}
+        />
+        <TopTenList
+          title={t("dashboard.topCustomersMonth")}
+          emptyLabel={t("dashboard.topTenEmpty")}
+          metricLabel={t("dashboard.topCustomersMetric")}
+          rows={topCustomers.map((r) => ({
+            rank: r.rank,
+            name: r.name,
+            sub: r.phone || (r.orders != null ? t("dashboard.topCustomersOrders", { count: String(r.orders) }) : undefined),
+            value: cur(r.value),
+          }))}
+        />
+        <TopTenList
+          title={t("dashboard.topServicesMonth")}
+          emptyLabel={t("dashboard.topTenEmpty")}
+          metricLabel={t("dashboard.topServicesMetric")}
+          rows={topServices.map((r) => ({
+            rank: r.rank,
+            name: r.name,
+            sub:
+              r.count != null
+                ? t("dashboard.topServicesCount", { count: String(r.count) })
+                : undefined,
+            value: cur(r.value),
+          }))}
+        />
       </div>
     </div>
     </div>

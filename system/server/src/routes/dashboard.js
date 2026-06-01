@@ -18,6 +18,12 @@ function startOfMonth() {
   return d;
 }
 
+function monthRangeFromQuery(req) {
+  const from = req.query.from ? new Date(String(req.query.from)) : startOfMonth();
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date();
+  return { from, to };
+}
+
 /** فلتر فرع ضمن المؤسسة */
 function branchScope(req, branchId) {
   const orgId = req.user.organizationId;
@@ -193,6 +199,130 @@ router.get("/monthly-profit", async (req, res) => {
     });
   }
   res.json(out);
+});
+
+/** Top 10 products by sales value in the selected period (default: current month). */
+router.get("/top-products-month", async (req, res) => {
+  const branchId = req.query.branchId || (req.user.role === "ADMIN" ? null : req.user.branchId);
+  const { from, to } = monthRangeFromQuery(req);
+  const bf = branchScope(req, branchId);
+
+  const items = await prisma.saleItem.findMany({
+    where: {
+      sale: {
+        ...bf,
+        createdAt: { gte: from, lte: to },
+      },
+    },
+    include: { product: { select: { name: true, sku: true } } },
+  });
+
+  const map = new Map();
+  for (const it of items) {
+    const name = it.product?.name || "—";
+    const prev = map.get(name) || { name, value: 0, quantity: 0 };
+    prev.value += Number(it.subtotal);
+    prev.quantity += it.quantity;
+    map.set(name, prev);
+  }
+  const rows = [...map.values()]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+    .map((r, i) => ({
+      rank: i + 1,
+      name: r.name,
+      value: Number(r.value.toFixed(2)),
+      quantity: r.quantity,
+    }));
+  res.json(rows);
+});
+
+/** Top 10 customers by purchase total in the selected period. */
+router.get("/top-customers-month", async (req, res) => {
+  const branchId = req.query.branchId || (req.user.role === "ADMIN" ? null : req.user.branchId);
+  const { from, to } = monthRangeFromQuery(req);
+  const bf = branchScope(req, branchId);
+
+  const sales = await prisma.sale.findMany({
+    where: {
+      ...bf,
+      customerId: { not: null },
+      createdAt: { gte: from, lte: to },
+    },
+    include: { customer: { select: { name: true, phone: true } } },
+  });
+
+  const map = new Map();
+  for (const s of sales) {
+    const cid = s.customerId;
+    const label = s.customer?.name || cid;
+    const prev = map.get(cid) || {
+      name: label,
+      phone: s.customer?.phone || null,
+      value: 0,
+      orders: 0,
+    };
+    prev.value += Number(s.total);
+    prev.orders += 1;
+    map.set(cid, prev);
+  }
+  const rows = [...map.values()]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+    .map((r, i) => ({
+      rank: i + 1,
+      name: r.name,
+      phone: r.phone,
+      value: Number(r.value.toFixed(2)),
+      orders: r.orders,
+    }));
+  res.json(rows);
+});
+
+function appointmentScope(req, branchId) {
+  const orgId = req.user.organizationId;
+  const bid = branchId || (req.user.role === "ADMIN" ? null : req.user.branchId);
+  if (bid) return { organizationId: orgId, branchId: String(bid) };
+  return { organizationId: orgId };
+}
+
+/** Top 10 grooming services by appointments in the period. */
+router.get("/top-services-month", async (req, res) => {
+  const branchId = req.query.branchId || (req.user.role === "ADMIN" ? null : req.user.branchId);
+  const { from, to } = monthRangeFromQuery(req);
+  const apptFilter = appointmentScope(req, branchId);
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      ...apptFilter,
+      startAt: { gte: from, lte: to },
+      status: { in: ["DONE", "CHECKED_IN", "CONFIRMED", "BOOKED"] },
+      serviceId: { not: null },
+    },
+    include: {
+      service: { select: { name: true, price: true } },
+    },
+  });
+
+  const map = new Map();
+  for (const a of appointments) {
+    const sid = a.serviceId;
+    const name = a.service?.name || "—";
+    const prev = map.get(sid) || { name, count: 0, revenue: 0 };
+    prev.count += 1;
+    prev.revenue += Number(a.service?.price || 0);
+    map.set(sid, prev);
+  }
+  const rows = [...map.values()]
+    .sort((a, b) => b.count - a.count || b.revenue - a.revenue)
+    .slice(0, 10)
+    .map((r, i) => ({
+      rank: i + 1,
+      name: r.name,
+      count: r.count,
+      value: Number(r.revenue.toFixed(2)),
+    }));
+  res.json(rows);
 });
 
 export default router;
