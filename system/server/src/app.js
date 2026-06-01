@@ -48,6 +48,22 @@ import { databaseUrlFingerprint } from "./lib/databaseUrlFingerprint.js";
 
 const app = express();
 app.set("trust proxy", 1);
+
+/** على Vercel قد يصل المسار بدون بادئة /api — نُوحّدها قبل باقي الـ middleware */
+if (process.env.VERCEL) {
+  app.use((req, _res, next) => {
+    const fix = (u) => {
+      if (!u || typeof u !== "string") return u;
+      if (u.startsWith("/api")) return u;
+      if (u === "/" || u === "") return "/api/";
+      return "/api" + (u.startsWith("/") ? u : "/" + u);
+    };
+    if (req.url) req.url = fix(req.url);
+    if (req.originalUrl) req.originalUrl = fix(req.originalUrl);
+    next();
+  });
+}
+
 app.use(helmetMiddleware);
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "2mb" }));

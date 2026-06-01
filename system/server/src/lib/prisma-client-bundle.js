@@ -1,7 +1,4 @@
-import { createRequire } from "node:module";
+import { PrismaClient, Prisma, $Enums } from "@prisma/client";
 
-const require = createRequire(import.meta.url);
-const mod = require("../generated/prisma/index.js");
-
-export const PrismaClient = mod.PrismaClient;
-export const Prisma = mod.Prisma;
+export { PrismaClient, Prisma, $Enums };
+export const BusinessVertical = $Enums.BusinessVertical;

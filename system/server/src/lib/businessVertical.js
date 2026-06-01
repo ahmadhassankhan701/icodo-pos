@@ -1,4 +1,4 @@
-import { BusinessVertical } from "../generated/prisma/index.js";
+import { BusinessVertical } from "./prisma-client-bundle.js";
 
 const ALLOWED = new Set(Object.values(BusinessVertical));
 

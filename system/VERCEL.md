@@ -103,4 +103,8 @@ npx vercel --prod
 
 ## ملاحظة عن Prisma على Vercel
 
-الدالة `api/[...slug].js` تعمل كـ Serverless؛ مع قواعد بعيدة يُنصح باستخدام **connection pooling** (مثلاً وضع Supabase Transaction pooler في `DATABASE_URL` مع `?pgbouncer=true` إن طلبت الوثائق). إذا واجهت أخطاء اتصال أو مهلة، راجع إعدادات الـ pool وحدود الاتصال.
+- العميل يُولَّد في `server/node_modules/@prisma/client` (المسار الافتراضي) مع `binaryTargets` تشمل `rhel-openssl-3.0.x`.
+- `vercel.json` يضمّن `server/node_modules/.prisma/**` داخل دالة الـ API.
+- مع قواعد بعيدة يُنصح بـ **connection pooling** (مثلاً Supabase Transaction pooler في `DATABASE_URL` مع `?pgbouncer=true` إن طلبت الوثائق).
+
+إن ظهر **FUNCTION_INVOCATION_FAILED** أو 500 على `/api/health`: راجع **Functions → Logs** وتأكد من `DATABASE_URL` و`JWT_SECRET` في متغيرات Vercel (Production).
