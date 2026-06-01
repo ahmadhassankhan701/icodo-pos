@@ -3,5 +3,18 @@
   "framework": null,
   "installCommand": "npm run install:all --prefix system",
   "buildCommand": "npm run build:vercel --prefix system",
-  "outputDirectory": "system/client/dist"
+  "outputDirectory": "system/client/dist",
+  "functions": {
+    "api/[...slug].js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/[...slug]" },
+    {
+      "source": "/((?!api/)(?!.*\\.).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

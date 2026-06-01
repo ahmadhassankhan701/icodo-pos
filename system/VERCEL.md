@@ -10,7 +10,11 @@
 
 ### مستودع الجذر فيه مجلد `system/` (أي اسم مشروع)
 
-عيّن في Vercel **Settings → General → Root Directory** القيمة **`system`** (لتشغيل **API** و`api/[...slug].js`). إن تركت الجذر `.` فسيُقرأ `vercel.json` من جذر المستودع (البناء فقط؛ الـ API قد لا يعمل إلا مع Root = `system`).
+عيّن في Vercel **Settings → General → Root Directory** إما **`system`** (مُفضّل) أو **`.`** (جذر المستودع). في الحالتين يجب أن يعمل الـ API:
+- مع Root = **`system`**: يُستخدم `system/vercel.json` و`system/api/[...slug].js`
+- مع Root = **`.`**: يُستخدم `vercel.json` في الجذر و`api/[...slug].js` (يُوجّه إلى خادم Express داخل `system/`)
+
+**لا** تضبط Root Directory على `system/client` فقط — ذلك ينشر الواجهة بدون API وستحصل على **404** لكل `/api/*`.
 
 **Settings → Build & Development:** Framework Preset = **Other**. إذا كان **Override** على Build Command = `vite build` فألغِه.
 
