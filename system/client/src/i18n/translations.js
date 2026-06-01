@@ -242,6 +242,10 @@ const entries = [
   ["dashboard.topCustomersOrders", "{{count}} فاتورة", "{{count}} orders"],
   ["dashboard.topServicesMetric", "إيراد تقديري", "Est. revenue"],
   ["dashboard.topServicesCount", "{{count}} موعد", "{{count}} appointments"],
+  ["dashboard.salesByEmployeesMonth", "مبيعات الموظفين (الشهر)", "Employee sales (month)"],
+  ["dashboard.salesByEmployeesEmpty", "لا يوجد موظفون نشطون", "No active employees"],
+  ["dashboard.salesByEmployeesMetric", "إجمالي المبيعات", "Total sales"],
+  ["dashboard.salesByEmployeesOrders", "{{count}} فاتورة", "{{count}} invoices"],
 
   ["nav.printSettings", "إعدادات الطباعة", "Print settings"],
 

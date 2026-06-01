@@ -325,4 +325,85 @@ router.get("/top-services-month", async (req, res) => {
   res.json(rows);
 });
 
+/** Sales totals per employee (linked user) for the period; includes active employees with zero sales. */
+router.get("/sales-by-employees-month", async (req, res) => {
+  const branchId = req.query.branchId || (req.user.role === "ADMIN" ? null : req.user.branchId);
+  const { from, to } = monthRangeFromQuery(req);
+  const bf = branchScope(req, branchId);
+  const orgId = req.user.organizationId;
+
+  const sales = await prisma.sale.findMany({
+    where: {
+      ...bf,
+      createdAt: { gte: from, lte: to },
+    },
+    select: { userId: true, total: true },
+  });
+
+  const byUser = new Map();
+  for (const s of sales) {
+    const uid = s.userId;
+    const prev = byUser.get(uid) || { value: 0, orders: 0 };
+    prev.value += Number(s.total);
+    prev.orders += 1;
+    byUser.set(uid, prev);
+  }
+
+  const empWhere = {
+    organizationId: orgId,
+    status: "ACTIVE",
+  };
+  if (branchId) empWhere.branchId = String(branchId);
+
+  const employees = await prisma.employee.findMany({
+    where: empWhere,
+    include: { user: { select: { id: true, name: true, nameEn: true } } },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = [];
+  const seenUserIds = new Set();
+
+  for (const emp of employees) {
+    const uid = emp.userId;
+    const stats = uid ? byUser.get(uid) : null;
+    if (uid) seenUserIds.add(uid);
+    rows.push({
+      name: emp.name,
+      nameEn: emp.nameEn || emp.user?.nameEn || null,
+      value: stats ? Number(stats.value.toFixed(2)) : 0,
+      orders: stats?.orders ?? 0,
+    });
+  }
+
+  const orphanUserIds = [...byUser.keys()].filter((uid) => !seenUserIds.has(uid));
+  if (orphanUserIds.length) {
+    const users = await prisma.user.findMany({
+      where: { id: { in: orphanUserIds }, organizationId: orgId },
+      select: { id: true, name: true, nameEn: true },
+    });
+    for (const u of users) {
+      const stats = byUser.get(u.id);
+      rows.push({
+        name: u.name,
+        nameEn: u.nameEn,
+        value: Number(stats.value.toFixed(2)),
+        orders: stats.orders,
+      });
+    }
+  }
+
+  const sorted = rows
+    .sort((a, b) => b.value - a.value || b.orders - a.orders || a.name.localeCompare(b.name))
+    .map((r, i) => ({
+      rank: i + 1,
+      name: r.name,
+      nameEn: r.nameEn,
+      value: r.value,
+      orders: r.orders,
+    }));
+
+  res.json(sorted);
+});
+
 export default router;

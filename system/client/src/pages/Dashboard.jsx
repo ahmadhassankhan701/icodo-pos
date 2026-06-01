@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [topProducts, setTopProducts] = useState([]);
   const [topCustomers, setTopCustomers] = useState([]);
   const [topServices, setTopServices] = useState([]);
+  const [salesByEmployees, setSalesByEmployees] = useState([]);
 
   useEffect(() => {
     api("/api/branches").then(setBranches).catch(() => {});
@@ -40,13 +41,14 @@ export default function Dashboard() {
   useEffect(() => {
     const q = branchId ? `?branchId=${branchId}` : "";
     const run = async () => {
-      const [s, p, m, tp, tc, ts] = await Promise.all([
+      const [s, p, m, tp, tc, ts, se] = await Promise.all([
         api(`/api/dashboard/summary${q}`),
         api(`/api/dashboard/sales-by-product${q}`),
         api(`/api/dashboard/monthly-profit${q}`),
         api(`/api/dashboard/top-products-month${q}`),
         api(`/api/dashboard/top-customers-month${q}`),
         api(`/api/dashboard/top-services-month${q}`),
+        api(`/api/dashboard/sales-by-employees-month${q}`),
       ]);
       setSummary(s);
       setByProduct(p);
@@ -54,6 +56,7 @@ export default function Dashboard() {
       setTopProducts(Array.isArray(tp) ? tp : []);
       setTopCustomers(Array.isArray(tc) ? tc : []);
       setTopServices(Array.isArray(ts) ? ts : []);
+      setSalesByEmployees(Array.isArray(se) ? se : []);
       if (user?.role === "ADMIN") {
         const b = await api("/api/dashboard/sales-by-branch");
         setByBranch(b);
@@ -65,6 +68,11 @@ export default function Dashboard() {
   }, [branchId, user?.role]);
 
   const cur = (v) => `${Number(v).toFixed(2)} ${t("common.currency")}`;
+
+  const employeeRowName = (r) => {
+    if (locale === "en" && r.nameEn?.trim()) return r.nameEn.trim();
+    return r.name;
+  };
 
   const printReports = () => {
     requestAnimationFrame(() => {
@@ -262,6 +270,20 @@ export default function Dashboard() {
             sub:
               r.count != null
                 ? t("dashboard.topServicesCount", { count: String(r.count) })
+                : undefined,
+            value: cur(r.value),
+          }))}
+        />
+        <TopTenList
+          title={t("dashboard.salesByEmployeesMonth")}
+          emptyLabel={t("dashboard.salesByEmployeesEmpty")}
+          metricLabel={t("dashboard.salesByEmployeesMetric")}
+          rows={salesByEmployees.map((r) => ({
+            rank: r.rank,
+            name: employeeRowName(r),
+            sub:
+              r.orders != null
+                ? t("dashboard.salesByEmployeesOrders", { count: String(r.orders) })
                 : undefined,
             value: cur(r.value),
           }))}
