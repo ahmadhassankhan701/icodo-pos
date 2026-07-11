@@ -6,6 +6,10 @@ import { AppLayout } from "./components/layout/AppLayout.jsx";
 import { VerticalFeatureGate } from "./components/VerticalFeatureGate.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+import { MarketingLayout } from "./marketing/MarketingLayout.jsx";
+import Home from "./pages/marketing/Home.jsx";
+import About from "./pages/marketing/About.jsx";
+import Contact from "./pages/marketing/Contact.jsx";
 import POS from "./pages/POS.jsx";
 import Wholesale from "./pages/Wholesale.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -74,6 +78,23 @@ function Protected({ children, roles }) {
   return children;
 }
 
+function PublicHome() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        Loading...
+      </div>
+    );
+  }
+  if (user) {
+    return (
+      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/pos"} replace />
+    );
+  }
+  return <Home />;
+}
+
 function ProtectedPlatform({ children }) {
   const { user, loading } = useAuth();
   const { t } = useI18n();
@@ -123,6 +144,11 @@ export default function App() {
   return (
     <React.Suspense fallback={lazyFallback}>
       <Routes>
+        <Route element={<MarketingLayout />}>
+          <Route path="/" element={<PublicHome />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+        </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
@@ -146,7 +172,6 @@ export default function App() {
             </Protected>
           }
         >
-          <Route path="/" element={<Navigate to="/pos" replace />} />
           <Route path="/pos" element={<POS />} />
           <Route
             path="/wholesale"
@@ -326,7 +351,10 @@ export default function App() {
             }
           />
         </Route>
-        <Route path="*" element={<Navigate to="/pos" replace />} />
+        <Route
+          path="*"
+          element={<Navigate to={user ? "/pos" : "/"} replace />}
+        />
       </Routes>
     </React.Suspense>
   );

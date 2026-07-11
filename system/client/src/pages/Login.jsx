@@ -1,19 +1,19 @@
 import React, { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import { useTheme } from "../context/ThemeContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { AuthShell } from "../marketing/AuthShell.jsx";
+import { useMarketingCopy } from "../marketing/copy.js";
 
 export default function Login() {
   const { login, user, loading } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const { t, locale, setLocale } = useI18n();
+  const { t, locale } = useI18n();
+  const c = useMarketingCopy(locale);
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [organizationSlug, setOrganizationSlug] = useState("");
   const [err, setErr] = useState("");
-  /** بصمة آمنة من السيرفر عند فشل اتصال قاعدة البيانات (503) */
   const [dbUrlInfo, setDbUrlInfo] = useState(null);
 
   if (loading) {
@@ -48,103 +48,42 @@ export default function Login() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-        background: "var(--login-gradient)",
-        position: "relative",
-      }}
-    >
-      <div style={{ position: "absolute", top: 16, insetInlineEnd: 16, display: "flex", gap: 8 }}>
-        <button
-          type="button"
-          className="btn-touch"
-          onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-          style={{
-            background: "var(--surface)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-            minHeight: 44,
-          }}
-        >
-          {locale === "ar" ? t("lang.en") : t("lang.ar")}
-        </button>
-        <button
-          type="button"
-          className="btn-touch"
-          onClick={toggleTheme}
-          style={{
-            background: "var(--surface)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-            minHeight: 44,
-          }}
-        >
-          {theme === "dark" ? t("theme.lightShort") : t("theme.darkShort")}
-        </button>
-      </div>
-      <form className="card" onSubmit={submit} style={{ width: "100%", maxWidth: 400 }}>
-        <h1 style={{ marginTop: 0 }}>{t("login.title")}</h1>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          <span style={{ display: "block", marginBottom: 6, color: "var(--muted)" }}>{t("login.email")}</span>
+    <AuthShell title={c.auth.signInTitle} subtitle={c.auth.signInSub}>
+      <form className="mkt-form" onSubmit={submit}>
+        <div className="mkt-field">
+          <label htmlFor="login-email">{t("login.email")}</label>
           <input
+            id="login-email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
             required
             autoComplete="username"
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 0,
-              border: "1px solid var(--border)",
-              background: "var(--bg)",
-              color: "var(--text)",
-            }}
           />
-        </label>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          <span style={{ display: "block", marginBottom: 6, color: "var(--muted)" }}>{t("login.orgSlug")}</span>
+        </div>
+        <div className="mkt-field">
+          <label htmlFor="login-slug">{t("login.orgSlug")}</label>
           <input
+            id="login-slug"
             value={organizationSlug}
             onChange={(e) => setOrganizationSlug(e.target.value)}
             type="text"
             autoComplete="organization"
             placeholder="default"
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 0,
-              border: "1px solid var(--border)",
-              background: "var(--bg)",
-              color: "var(--text)",
-            }}
           />
-        </label>
-        <label style={{ display: "block", marginBottom: 16 }}>
-          <span style={{ display: "block", marginBottom: 6, color: "var(--muted)" }}>{t("login.password")}</span>
+        </div>
+        <div className="mkt-field">
+          <label htmlFor="login-password">{t("login.password")}</label>
           <input
+            id="login-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
             required
             autoComplete="current-password"
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 0,
-              border: "1px solid var(--border)",
-              background: "var(--bg)",
-              color: "var(--text)",
-            }}
           />
-        </label>
-        {err ? (
-          <div style={{ color: "var(--danger)", marginBottom: 12, fontSize: 14 }}>{err}</div>
-        ) : null}
+        </div>
+        {err ? <div className="mkt-error">{err}</div> : null}
         {dbUrlInfo ? (
           <div
             style={{
@@ -152,35 +91,32 @@ export default function Login() {
               padding: 12,
               fontSize: 13,
               lineHeight: 1.45,
-              color: "var(--muted)",
-              background: "var(--surface2)",
-              border: "1px solid var(--border)",
+              color: "var(--mkt-muted)",
+              background: "#fff",
+              border: "1px solid var(--mkt-line)",
+              borderRadius: "0.65rem",
             }}
           >
-            <strong style={{ color: "var(--text)", display: "block", marginBottom: 6 }}>
+            <strong style={{ color: "var(--mkt-ink)", display: "block", marginBottom: 6 }}>
               {t("login.dbDiagnostics")}
             </strong>
             {dbUrlInfo.hint ? <div style={{ marginBottom: 8 }}>{dbUrlInfo.hint}</div> : null}
             {dbUrlInfo.databaseUrlSet && dbUrlInfo.host ? (
               <div style={{ fontSize: 12, fontFamily: "ui-monospace, monospace" }}>
-                {t("login.dbHost")}: {String(dbUrlInfo.host)} — {t("login.dbPort")}: {String(dbUrlInfo.port ?? "—")}
+                {t("login.dbHost")}: {String(dbUrlInfo.host)} — {t("login.dbPort")}:{" "}
+                {String(dbUrlInfo.port ?? "—")}
               </div>
             ) : null}
           </div>
         ) : null}
-        <button
-          type="submit"
-          className="btn-touch"
-          style={{ width: "100%", background: "var(--accent)", color: "#fff", marginBottom: 12 }}
-        >
+        <button type="submit" className="mkt-btn mkt-btn-primary mkt-btn-block">
           {t("login.submit")}
         </button>
-        <div style={{ textAlign: "center", fontSize: 14 }}>
-          <Link to="/register" style={{ color: "var(--accent)" }}>
-            {t("login.createAccount")}
-          </Link>
-        </div>
+        <p className="mkt-auth-link">
+          {c.auth.noAccount}{" "}
+          <Link to="/register">{c.auth.createOne}</Link>
+        </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }

@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["pwa-192.png", "pwa-512.png", "favicon.png", "pwa-icon-source.svg"],
       manifest: {
-        name: "متجر الحيوانات — POS",
-        short_name: "POS",
-        description: "نقطة بيع تعمل دون اتصال بعد التخزين المسبق",
+        name: "i codo POS",
+        short_name: "i codo",
+        description: "Multi-vertical point of sale by i codo",
         theme_color: "#0f172a",
         background_color: "#0f172a",
         display: "standalone",
