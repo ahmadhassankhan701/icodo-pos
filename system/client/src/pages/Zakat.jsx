@@ -52,7 +52,7 @@ export default function Zakat() {
   const zakatDue = round2((aboveNisab * rateNum) / 100);
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 720, width: "100%", marginInline: "auto" }}>
       <h1 style={{ marginTop: 0 }}>{t("zakat.title")}</h1>
       <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6 }}>{t("zakat.intro")}</p>
 

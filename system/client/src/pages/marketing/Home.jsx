@@ -17,7 +17,7 @@ export default function Home() {
         <div className="mkt-shell mkt-hero-grid">
           <div className="mkt-hero-copy">
             <div className="mkt-hero-brand">
-              <IcodoLogo variant="dark" height={190} className="mkt-hero-logo-img" />
+              <IcodoLogo variant="dark" width={300} className="mkt-hero-logo-img" />
             </div>
             <h1>{h.headline}</h1>
             <p>{h.support}</p>

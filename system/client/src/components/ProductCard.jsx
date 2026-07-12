@@ -71,7 +71,7 @@ export function ProductCard({
       <div
         style={{
           aspectRatio: compact ? "1 / 1" : "4/3",
-          borderRadius: 0,
+          borderRadius: 12,
           overflow: "hidden",
           background: "var(--surface2)",
           display: "flex",

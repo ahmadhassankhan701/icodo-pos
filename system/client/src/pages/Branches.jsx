@@ -42,7 +42,7 @@ export default function Branches() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640, width: "100%", marginInline: "auto" }}>
       <h1 style={{ margin: 0 }}>{t("branches.title")}</h1>
 
       <form className="card" onSubmit={add} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -93,7 +93,7 @@ export default function Branches() {
 
 const inp = {
   padding: 12,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

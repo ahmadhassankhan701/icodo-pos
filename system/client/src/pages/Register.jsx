@@ -61,7 +61,7 @@ export default function Register() {
   }
   if (user) {
     return (
-      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/pos"} replace />
+      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/dashboard"} replace />
     );
   }
 
@@ -106,7 +106,7 @@ export default function Register() {
         adminPassword,
         businessVertical,
       });
-      nav("/pos", { replace: true });
+      nav("/dashboard", { replace: true });
     } catch (x) {
       setErr(x.message || t("register.failed"));
       const info = x?.data?.urlInfo;

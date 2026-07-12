@@ -387,7 +387,7 @@ export default function Products() {
             style={{
               minHeight: 44,
               padding: "8px 12px",
-              borderRadius: 0,
+              borderRadius: 12,
               background: "var(--surface)",
               color: "var(--text)",
               border: "1px solid var(--border)",
@@ -417,7 +417,7 @@ export default function Products() {
                 style={{
                   minHeight: 44,
                   padding: "8px 12px",
-                  borderRadius: 0,
+                  borderRadius: 12,
                   background: "var(--surface)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
@@ -654,7 +654,7 @@ export default function Products() {
               gap: 10,
               marginBottom: 12,
               padding: "10px 12px",
-              borderRadius: 0,
+              borderRadius: 12,
               background: "var(--surface2)",
               border: "1px solid var(--border)",
             }}
@@ -1029,7 +1029,7 @@ export default function Products() {
 
 const inp = {
   padding: 10,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

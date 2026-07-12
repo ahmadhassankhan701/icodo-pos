@@ -29,7 +29,7 @@ import Cash from "./pages/Cash.jsx";
 import Audit from "./pages/Audit.jsx";
 import SyncQueueStatus from "./pages/SyncQueueStatus.jsx";
 import Alerts from "./pages/Alerts.jsx";
-import PrintSettings from "./pages/PrintSettings.jsx";
+import Settings from "./pages/Settings.jsx";
 import LoyaltyCoupons from "./pages/LoyaltyCoupons.jsx";
 const loadReports = () => import("./pages/Reports.jsx");
 const loadAppointments = () => import("./pages/Appointments.jsx");
@@ -73,7 +73,7 @@ function Protected({ children, roles }) {
   }
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/pos" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   return children;
 }
@@ -89,7 +89,7 @@ function PublicHome() {
   }
   if (user) {
     return (
-      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/pos"} replace />
+      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/dashboard"} replace />
     );
   }
   return <Home />;
@@ -106,7 +106,7 @@ function ProtectedPlatform({ children }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.isPlatformAdmin) return <Navigate to="/pos" replace />;
+  if (!user.isPlatformAdmin) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -184,7 +184,8 @@ export default function App() {
           <Route path="/sync-queue" element={<SyncQueueStatus />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/print-settings" element={<PrintSettings />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/print-settings" element={<Navigate to="/settings" replace />} />
           <Route
             path="/loyalty"
             element={
@@ -353,7 +354,7 @@ export default function App() {
         </Route>
         <Route
           path="*"
-          element={<Navigate to={user ? "/pos" : "/"} replace />}
+          element={<Navigate to={user ? "/dashboard" : "/"} replace />}
         />
       </Routes>
     </React.Suspense>

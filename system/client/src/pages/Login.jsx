@@ -12,7 +12,6 @@ export default function Login() {
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [organizationSlug, setOrganizationSlug] = useState("");
   const [err, setErr] = useState("");
   const [dbUrlInfo, setDbUrlInfo] = useState(null);
 
@@ -25,7 +24,7 @@ export default function Login() {
   }
   if (user) {
     return (
-      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/pos"} replace />
+      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/dashboard"} replace />
     );
   }
 
@@ -34,12 +33,8 @@ export default function Login() {
     setErr("");
     setDbUrlInfo(null);
     try {
-      const loggedIn = await login(
-        email,
-        password,
-        organizationSlug.trim() ? organizationSlug.trim() : undefined
-      );
-      nav(loggedIn?.isPlatformAdmin ? "/platform/organizations" : "/pos", { replace: true });
+      const loggedIn = await login(email, password);
+      nav(loggedIn?.isPlatformAdmin ? "/platform/organizations" : "/dashboard", { replace: true });
     } catch (x) {
       setErr(x.message || t("login.failed"));
       const info = x?.data?.urlInfo;
@@ -59,17 +54,6 @@ export default function Login() {
             type="email"
             required
             autoComplete="username"
-          />
-        </div>
-        <div className="mkt-field">
-          <label htmlFor="login-slug">{t("login.orgSlug")}</label>
-          <input
-            id="login-slug"
-            value={organizationSlug}
-            onChange={(e) => setOrganizationSlug(e.target.value)}
-            type="text"
-            autoComplete="organization"
-            placeholder="default"
           />
         </div>
         <div className="mkt-field">

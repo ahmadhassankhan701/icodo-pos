@@ -225,7 +225,7 @@ export default function Sync() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720, width: "100%", marginInline: "auto" }}>
       <h1 style={{ margin: 0 }}>{t("sync.title")}</h1>
       <p style={{ color: "var(--muted)", margin: 0 }}>
         {t("sync.intro")}{" "}
@@ -426,7 +426,7 @@ export default function Sync() {
 
 const inp = {
   padding: 12,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

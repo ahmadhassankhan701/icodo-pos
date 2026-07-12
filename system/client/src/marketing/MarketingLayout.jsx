@@ -90,7 +90,7 @@ export function MarketingLayout() {
           <div className="mkt-footer-top">
             <div className="mkt-footer-brand">
               <Link to="/" className="mkt-brand mkt-brand-footer" aria-label="i codo">
-                <IcodoLogo variant="dark" height={110} />
+                <IcodoLogo variant="dark" width={200} />
               </Link>
               <p className="mkt-footer-tagline">{c.footer.tagline}</p>
             </div>

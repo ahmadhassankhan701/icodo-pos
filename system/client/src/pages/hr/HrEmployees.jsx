@@ -5,7 +5,7 @@ import { useI18n } from "../../context/LanguageContext.jsx";
 const inp = {
   minHeight: 40,
   padding: "8px 10px",
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--bg)",
   color: "var(--text)",

@@ -4,7 +4,7 @@ import { useI18n } from "../context/LanguageContext.jsx";
 
 const card = {
   padding: 16,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--surface)",
   marginBottom: 20,
@@ -13,7 +13,7 @@ const card = {
 const inp = {
   minHeight: 40,
   padding: "8px 12px",
-  borderRadius: 0,
+  borderRadius: 12,
   background: "var(--bg)",
   color: "var(--text)",
   border: "1px solid var(--border)",
@@ -152,7 +152,7 @@ export default function LoyaltyCoupons() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ maxWidth: 900, width: "100%", marginInline: "auto" }}>
       <h1 style={{ marginTop: 0 }}>{t("loyalty.title")}</h1>
       <p style={{ color: "var(--muted)", fontSize: 14 }}>{t("loyalty.intro")}</p>
       {msg ? (

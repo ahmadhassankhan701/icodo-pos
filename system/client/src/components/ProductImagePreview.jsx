@@ -25,7 +25,7 @@ export function ProductImagePreview({
         style={{
           width,
           height,
-          borderRadius: 0,
+          borderRadius: 12,
           background: "var(--surface2)",
           display: "flex",
           alignItems: "center",
@@ -53,7 +53,7 @@ export function ProductImagePreview({
         width,
         height,
         objectFit: "cover",
-        borderRadius: 0,
+        borderRadius: 12,
         background: "var(--surface2)",
         display: "block",
         ...style,

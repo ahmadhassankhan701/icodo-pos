@@ -71,7 +71,7 @@ export function Cart({ lines, onChangeQty, onRemove, total, embedded = false }) 
             style={{
               width: 72,
               padding: 8,
-              borderRadius: 0,
+              borderRadius: 12,
               border: "1px solid var(--border)",
               background: "var(--bg)",
               color: "var(--text)",

@@ -6,7 +6,7 @@ import { branchDisplayName } from "../utils/displayLabels.js";
 const inp = {
   width: "100%",
   padding: "10px 12px",
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--surface)",
   color: "var(--text)",

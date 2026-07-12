@@ -5,7 +5,7 @@ import { listSyncQueueRows, removeSyncQueueItem } from "../offline/syncQueueList
 
 const card = {
   padding: 16,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--surface)",
 };
@@ -65,7 +65,7 @@ export default function SyncQueueStatus() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 960 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 960, width: "100%", marginInline: "auto" }}>
       <h1 style={{ margin: 0 }}>{t("syncQueue.title")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("syncQueue.intro")}</p>
 

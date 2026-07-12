@@ -7,7 +7,7 @@ import { addLocalReadKeys, getLocalReadKeySet } from "../alerts/localRead.js";
 
 const card = {
   padding: 16,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--surface)",
 };
@@ -234,7 +234,7 @@ export default function Alerts() {
   const unreadCount = merged.filter((x) => !x.read).length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 960 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 960, width: "100%", marginInline: "auto" }}>
       <h1 style={{ margin: 0 }}>{t("alerts.pageTitle")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("alerts.intro")}</p>
 

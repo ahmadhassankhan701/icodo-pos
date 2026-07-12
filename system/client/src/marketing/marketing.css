@@ -80,6 +80,9 @@
 
 .mkt-logo {
   border-radius: 0;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .mkt-logo-lockup {
@@ -88,6 +91,8 @@
 
 .mkt-auth-logo {
   margin-bottom: 1.5rem;
+  width: min(260px, 100%);
+  height: auto !important;
 }
 
 .mkt-nav-links {
@@ -585,8 +590,9 @@
 }
 
 .mkt-nav-brand .mkt-logo {
-  height: 52px;
+  height: 48px;
   width: auto;
+  max-width: min(160px, 42vw);
 }
 
 .mkt-nav-wordmark {
@@ -604,8 +610,8 @@
 
 .mkt-page-hero-logo {
   margin-bottom: 0.5rem;
-  height: 148px !important;
-  width: auto !important;
+  width: min(280px, 100%) !important;
+  height: auto !important;
 }
 
 .mkt-page-hero--premium .mkt-page-hero-stack h1 {
@@ -619,9 +625,13 @@
 .mkt-hero-brand {
   display: grid;
   place-items: start;
+  width: min(300px, 100%);
 }
 
 .mkt-hero-logo-img {
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100%;
   filter: drop-shadow(0 20px 50px rgba(56, 189, 248, 0.25));
   animation: mkt-rise 0.75s ease both;
 }
@@ -629,6 +639,11 @@
 .mkt-auth-logo {
   margin-bottom: 1.5rem;
   filter: drop-shadow(0 16px 40px rgba(56, 189, 248, 0.2));
+}
+
+.mkt-footer-brand .mkt-logo {
+  width: min(200px, 100%) !important;
+  height: auto !important;
 }
 
 /* —— About / Contact —— */
@@ -1037,6 +1052,7 @@
   flex-direction: column;
   justify-content: flex-end;
   overflow: hidden;
+  min-width: 0;
 }
 
 .mkt-auth-visual::before {
@@ -1106,7 +1122,8 @@
 
 .mkt-footer-brand {
   flex: 1 1 260px;
-  max-width: 360px;
+  max-width: 420px;
+  min-width: 0;
 }
 
 .mkt-footer-tagline {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -9,22 +9,44 @@ import {
   LineChart,
   Line,
   CartesianGrid,
+  Cell,
 } from "recharts";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { DashboardCard } from "../components/DashboardCard.jsx";
 import { TopTenList } from "../components/TopTenList.jsx";
+import { DashIcon } from "../components/DashIcon.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { branchDisplayName } from "../utils/displayLabels.js";
 import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
 import { printPaperClass } from "../utils/printPaper.js";
 
+const tooltipStyle = {
+  background: "var(--surface)",
+  border: "1px solid var(--border)",
+  borderRadius: 16,
+  color: "var(--text)",
+  boxShadow: "0 16px 40px rgba(15, 23, 42, 0.16)",
+};
+
+function initials(name) {
+  return String(name || "?")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+}
+
 export default function Dashboard() {
   const { sizes } = usePrintSettings();
   const { user } = useAuth();
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState(user?.branchId || "");
+  const [query, setQuery] = useState("");
   const [summary, setSummary] = useState(null);
   const [byProduct, setByProduct] = useState([]);
   const [byBranch, setByBranch] = useState([]);
@@ -80,216 +102,326 @@ export default function Dashboard() {
     });
   };
 
+  const q = query.trim().toLowerCase();
+  const filterName = (name) => !q || String(name || "").toLowerCase().includes(q);
+
+  const filteredProducts = useMemo(
+    () => byProduct.filter((r) => filterName(r.name)),
+    [byProduct, q],
+  );
+  const filteredTopProducts = useMemo(
+    () => topProducts.filter((r) => filterName(r.name)),
+    [topProducts, q],
+  );
+  const filteredCustomers = useMemo(
+    () => topCustomers.filter((r) => filterName(r.name)),
+    [topCustomers, q],
+  );
+
+  const chartPeak = filteredProducts.reduce((m, r) => Math.max(m, Number(r.value) || 0), 0);
+  const monthTotal = summary ? Number(summary.salesMonthTotal) || 0 : 0;
+  const watermark = monthTotal >= 1000 ? `${(monthTotal / 1000).toFixed(1)}k` : String(Math.round(monthTotal));
+
+  const profitDelta = useMemo(() => {
+    if (!monthly?.length || monthly.length < 2) return null;
+    const a = Number(monthly[monthly.length - 2]?.profit) || 0;
+    const b = Number(monthly[monthly.length - 1]?.profit) || 0;
+    if (a === 0) return b > 0 ? { pct: "+100%", up: true } : null;
+    const pct = ((b - a) / Math.abs(a)) * 100;
+    const up = pct >= 0;
+    return { pct: `${up ? "+" : ""}${pct.toFixed(1)}%`, up };
+  }, [monthly]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="dash-page">
       <div className={`dashboard-print-area ${printPaperClass(sizes.reports)}`}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-        <h1 style={{ margin: 0 }}>{t("dashboard.title")}</h1>
-        <button
-          type="button"
-          className="btn-touch dashboard-print-hide"
-          onClick={printReports}
-          style={{ background: "var(--surface2)" }}
-          title={t("dashboard.printHint")}
-        >
-          {t("dashboard.print")}
-        </button>
-        {user?.role === "ADMIN" ? (
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="dashboard-print-branch-filter"
-            style={{
-              minHeight: 44,
-              padding: "8px 12px",
-              borderRadius: 0,
-              background: "var(--surface)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <option value="">{t("dashboard.allBranches")}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {branchDisplayName(b, locale)}
-              </option>
-            ))}
-          </select>
-        ) : null}
-      </div>
-
-      {summary ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            gap: 12,
-          }}
-        >
-          <DashboardCard title={t("dashboard.salesTodayCount")} value={String(summary.salesTodayCount)} />
-          <DashboardCard
-            title={t("dashboard.salesTodayValue")}
-            value={cur(summary.salesTodayTotal)}
-            accent="var(--success)"
-          />
-          <DashboardCard title={t("dashboard.monthTotal")} value={cur(summary.salesMonthTotal)} />
-          <DashboardCard
-            title={t("dashboard.wholesaleMonth")}
-            value={cur(summary.wholesaleMonthTotal ?? 0)}
-            hint={t("dashboard.wholesaleMonthHint")}
-            accent="var(--accent2)"
-          />
-          <DashboardCard
-            title={t("dashboard.profitMonth")}
-            value={`${summary.estimatedProfitMonth} ${t("common.currency")}`}
-            hint={t("dashboard.profitHint")}
-            accent="var(--accent2)"
-          />
-          <DashboardCard
-            title={t("dashboard.lowStock")}
-            value={String(summary.lowStockAlerts)}
-            accent="var(--warning)"
-          />
-        </div>
-      ) : (
-        <div className="card">{t("common.loading")}</div>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
-        }}
-      >
-        <div className="card" style={{ minHeight: 320 }}>
-          <div style={{ fontWeight: 800, marginBottom: 12 }}>{t("dashboard.chartByProduct")}</div>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={byProduct}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-              <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 10 }} />
-              <YAxis tick={{ fill: "var(--muted)" }} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 0,
-                  color: "var(--text)",
-                }}
-                formatter={(v) => [cur(v), t("dashboard.tooltipSales")]}
-              />
-              <Bar dataKey="value" fill="var(--accent)" radius={[0, 0, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {user?.role === "ADMIN" && byBranch.length ? (
-          <div className="card" style={{ minHeight: 320 }}>
-            <div style={{ fontWeight: 800, marginBottom: 12 }}>{t("dashboard.chartByBranch")}</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byBranch}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 11 }} />
-                <YAxis tick={{ fill: "var(--muted)" }} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 0,
-                    color: "var(--text)",
-                  }}
-                  formatter={(v) => [cur(v), t("dashboard.tooltipSales")]}
-                />
-                <Bar dataKey="value" fill="var(--accent2)" radius={[0, 0, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+        <header className="dash-top">
+          <div className="dash-top-title">
+            <h1>{t("dashboard.title")}</h1>
+            <p>{t("dashboard.overviewSub")}</p>
           </div>
-        ) : null}
 
-        <div className="card" style={{ minHeight: 320 }}>
-          <div style={{ fontWeight: 800, marginBottom: 12 }}>{t("dashboard.chartProfit")}</div>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={monthly}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-              <XAxis dataKey="label" tick={{ fill: "var(--muted)", fontSize: 10 }} />
-              <YAxis tick={{ fill: "var(--muted)" }} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 0,
-                  color: "var(--text)",
-                }}
-                formatter={(v) => [cur(v), t("dashboard.tooltipProfit")]}
+          <label className="dash-search dashboard-print-hide">
+            <DashIcon name="search" size={18} />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("dashboard.searchPlaceholder")}
+              aria-label={t("dashboard.searchPlaceholder")}
+            />
+          </label>
+
+          <div className="dash-top-actions dashboard-print-hide">
+            {user?.role === "ADMIN" ? (
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="dash-branch"
+                aria-label={t("dashboard.allBranches")}
+              >
+                <option value="">{t("dashboard.allBranches")}</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {branchDisplayName(b, locale)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button type="button" className="dash-btn-primary" onClick={printReports} title={t("dashboard.printHint")}>
+              <DashIcon name="print" size={16} />
+              {t("dashboard.print")}
+            </button>
+            <Link to="/alerts" className="dash-icon-btn" title={t("nav.notifications")} aria-label={t("nav.notifications")}>
+              <DashIcon name="bell" size={18} />
+            </Link>
+          </div>
+        </header>
+
+        {!summary ? (
+          <div className="dash-shell-card dash-loading">{t("common.loading")}</div>
+        ) : (
+          <div className="dash-layout">
+            <div className="dash-main-col">
+              <div className="dash-section-label">{t("dashboard.overview")}</div>
+
+              <div className="dash-hero-kpis">
+                <DashboardCard
+                  title={t("dashboard.salesTodayValue")}
+                  value={cur(summary.salesTodayTotal)}
+                  hint={t("dashboard.salesTodayCountHint", { count: String(summary.salesTodayCount) })}
+                  icon="cart"
+                  tone="blue"
+                  trend={summary.salesTodayCount > 0 ? `+${summary.salesTodayCount}` : "0"}
+                  trendPositive={summary.salesTodayCount > 0}
+                />
+                <DashboardCard
+                  title={t("dashboard.monthTotal")}
+                  value={cur(summary.salesMonthTotal)}
+                  hint={
+                    profitDelta
+                      ? t("dashboard.profitTrendHint", { pct: profitDelta.pct })
+                      : t("dashboard.profitHint")
+                  }
+                  icon="wallet"
+                  tone="ink"
+                  trend={profitDelta?.pct}
+                  trendPositive={profitDelta?.up !== false}
+                />
+              </div>
+
+              <div className="dash-mini-kpis">
+                <div className="dash-mini-kpi">
+                  <span className="dash-mini-ico tone-sky">
+                    <DashIcon name="spark" size={18} />
+                  </span>
+                  <div>
+                    <strong>{cur(summary.estimatedProfitMonth)}</strong>
+                    <span>{t("dashboard.profitMonth")}</span>
+                  </div>
+                </div>
+                <div className="dash-mini-kpi">
+                  <span className="dash-mini-ico tone-violet">
+                    <DashIcon name="box" size={18} />
+                  </span>
+                  <div>
+                    <strong>{cur(summary.wholesaleMonthTotal ?? 0)}</strong>
+                    <span>{t("dashboard.wholesaleMonth")}</span>
+                  </div>
+                </div>
+                <div className="dash-mini-kpi">
+                  <span className="dash-mini-ico tone-warn">
+                    <DashIcon name="alert" size={18} />
+                  </span>
+                  <div>
+                    <strong>{String(summary.lowStockAlerts)}</strong>
+                    <span>{t("dashboard.lowStock")}</span>
+                  </div>
+                </div>
+              </div>
+
+              <section className="dash-shell-card dash-customers-strip">
+                <div className="dash-strip-head">
+                  <h3>{t("dashboard.topCustomersMonth")}</h3>
+                  <Link to="/customers" className="dash-link-all">
+                    {t("dashboard.viewAll")}
+                    <span aria-hidden>→</span>
+                  </Link>
+                </div>
+                {!filteredCustomers.length ? (
+                  <div className="dash-empty">{t("dashboard.topTenEmpty")}</div>
+                ) : (
+                  <div className="dash-avatar-row">
+                    {filteredCustomers.slice(0, 8).map((c, i) => (
+                      <div key={`${c.name}-${i}`} className="dash-avatar-item" title={`${c.name} · ${cur(c.value)}`}>
+                        <div className={`dash-avatar tone-${(i % 5) + 1}`}>{initials(c.name)}</div>
+                        <span>{c.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="dash-shell-card dash-chart-card">
+                <div className="dash-chart-head">
+                  <div>
+                    <h3>{t("dashboard.chartByProduct")}</h3>
+                    <p>{t("dashboard.productViewSub")}</p>
+                  </div>
+                </div>
+                <div className="dash-chart-wrap">
+                  <div className="dash-chart-watermark" aria-hidden>
+                    {watermark}
+                  </div>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={filteredProducts.slice(0, 12)}>
+                      <CartesianGrid strokeDasharray="3 8" stroke="var(--chart-grid)" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: "var(--muted)", fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval={0}
+                        height={48}
+                      />
+                      <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v) => [cur(v), t("dashboard.tooltipSales")]} />
+                      <Bar dataKey="value" radius={[10, 10, 10, 10]} maxBarSize={36}>
+                        {filteredProducts.slice(0, 12).map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={Number(entry.value) === chartPeak && chartPeak > 0 ? "url(#dashBarHot)" : "url(#dashBarMute)"}
+                          />
+                        ))}
+                      </Bar>
+                      <defs>
+                        <linearGradient id="dashBarHot" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#38BDF8" />
+                          <stop offset="100%" stopColor="#2563EB" />
+                        </linearGradient>
+                        <linearGradient id="dashBarMute" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#CBD5E1" stopOpacity="0.9" />
+                          <stop offset="100%" stopColor="#94A3B8" stopOpacity="0.55" />
+                        </linearGradient>
+                      </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+
+              <section className="dash-shell-card dash-chart-card">
+                <div className="dash-chart-head">
+                  <div>
+                    <h3>{t("dashboard.chartProfit")}</h3>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={monthly}>
+                    <CartesianGrid strokeDasharray="3 8" stroke="var(--chart-grid)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v) => [cur(v), t("dashboard.tooltipProfit")]} />
+                    <Line
+                      type="monotone"
+                      dataKey="profit"
+                      stroke="#2563EB"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#38BDF8", stroke: "#2563EB", strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </section>
+
+              {user?.role === "ADMIN" && byBranch.length ? (
+                <section className="dash-shell-card dash-chart-card">
+                  <div className="dash-chart-head">
+                    <div>
+                      <h3>{t("dashboard.chartByBranch")}</h3>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={byBranch}>
+                      <CartesianGrid strokeDasharray="3 8" stroke="var(--chart-grid)" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v) => [cur(v), t("dashboard.tooltipSales")]} />
+                      <Bar dataKey="value" fill="#38BDF8" radius={[10, 10, 10, 10]} maxBarSize={40} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </section>
+              ) : null}
+            </div>
+
+            <aside className="dash-side-col">
+              <TopTenList
+                title={t("dashboard.topProductsMonth")}
+                emptyLabel={t("dashboard.topTenEmpty")}
+                metricLabel={t("dashboard.topProductsMetric")}
+                actionLabel={t("dashboard.viewAllProducts")}
+                onAction={() => navigate("/products")}
+                rows={filteredTopProducts.slice(0, 6).map((r, i) => ({
+                  name: r.name,
+                  value: cur(r.value),
+                  sub:
+                    r.quantity != null
+                      ? t("dashboard.topProductsQty", { count: String(r.quantity) })
+                      : undefined,
+                  status: i === filteredTopProducts.length - 1 && i > 2 ? "offline" : "active",
+                  statusLabel:
+                    i === filteredTopProducts.length - 1 && i > 2
+                      ? t("dashboard.statusQuiet")
+                      : t("dashboard.statusActive"),
+                }))}
               />
-              <Line type="monotone" dataKey="profit" stroke="var(--success)" strokeWidth={2} dot />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
-        }}
-      >
-        <TopTenList
-          title={t("dashboard.topProductsMonth")}
-          emptyLabel={t("dashboard.topTenEmpty")}
-          metricLabel={t("dashboard.topProductsMetric")}
-          rows={topProducts.map((r) => ({
-            rank: r.rank,
-            name: r.name,
-            sub:
-              r.quantity != null
-                ? t("dashboard.topProductsQty", { count: String(r.quantity) })
-                : undefined,
-            value: cur(r.value),
-          }))}
-        />
-        <TopTenList
-          title={t("dashboard.topCustomersMonth")}
-          emptyLabel={t("dashboard.topTenEmpty")}
-          metricLabel={t("dashboard.topCustomersMetric")}
-          rows={topCustomers.map((r) => ({
-            rank: r.rank,
-            name: r.name,
-            sub: r.phone || (r.orders != null ? t("dashboard.topCustomersOrders", { count: String(r.orders) }) : undefined),
-            value: cur(r.value),
-          }))}
-        />
-        <TopTenList
-          title={t("dashboard.topServicesMonth")}
-          emptyLabel={t("dashboard.topTenEmpty")}
-          metricLabel={t("dashboard.topServicesMetric")}
-          rows={topServices.map((r) => ({
-            rank: r.rank,
-            name: r.name,
-            sub:
-              r.count != null
-                ? t("dashboard.topServicesCount", { count: String(r.count) })
-                : undefined,
-            value: cur(r.value),
-          }))}
-        />
-        <TopTenList
-          title={t("dashboard.salesByEmployeesMonth")}
-          emptyLabel={t("dashboard.salesByEmployeesEmpty")}
-          metricLabel={t("dashboard.salesByEmployeesMetric")}
-          rows={salesByEmployees.map((r) => ({
-            rank: r.rank,
-            name: employeeRowName(r),
-            sub:
-              r.orders != null
-                ? t("dashboard.salesByEmployeesOrders", { count: String(r.orders) })
-                : undefined,
-            value: cur(r.value),
-          }))}
-        />
+              <div className="dash-aside-card">
+                <div className="dash-aside-head">
+                  <h3>{t("dashboard.salesByEmployeesMonth")}</h3>
+                </div>
+                {!salesByEmployees.length ? (
+                  <div className="dash-empty">{t("dashboard.salesByEmployeesEmpty")}</div>
+                ) : (
+                  <ul className="dash-comment-list">
+                    {salesByEmployees.slice(0, 5).map((r, i) => (
+                      <li key={`${r.name}-${i}`} className="dash-comment-row">
+                        <div className={`dash-avatar sm tone-${(i % 5) + 1}`}>{initials(employeeRowName(r))}</div>
+                        <div className="dash-comment-body">
+                          <div className="dash-comment-top">
+                            <strong>{employeeRowName(r)}</strong>
+                            <span>{cur(r.value)}</span>
+                          </div>
+                          <p>
+                            {r.orders != null
+                              ? t("dashboard.salesByEmployeesOrders", { count: String(r.orders) })
+                              : t("dashboard.salesByEmployeesMetric")}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <TopTenList
+                title={t("dashboard.topServicesMonth")}
+                emptyLabel={t("dashboard.topTenEmpty")}
+                metricLabel={t("dashboard.topServicesMetric")}
+                variant="compact"
+                rows={topServices.slice(0, 5).map((r, i) => ({
+                  name: r.name,
+                  value: cur(r.value),
+                  sub:
+                    r.count != null
+                      ? t("dashboard.topServicesCount", { count: String(r.count) })
+                      : undefined,
+                  status: "active",
+                  statusLabel: t("dashboard.statusActive"),
+                }))}
+              />
+            </aside>
+          </div>
+        )}
       </div>
-    </div>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export default function CustomerReceivables() {
   }, [t]);
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ maxWidth: 900, width: "100%", marginInline: "auto" }}>
       <h1 style={{ marginTop: 0 }}>{t("nav.receivable")}</h1>
       <p style={{ color: "var(--muted)", fontSize: 14 }}>
         {t("receivable.listIntro")}

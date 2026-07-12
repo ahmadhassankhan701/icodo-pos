@@ -89,7 +89,7 @@ export default function CustomerAccountDetail() {
   };
 
   return (
-    <div style={{ maxWidth: 960 }}>
+    <div style={{ maxWidth: 960, width: "100%", marginInline: "auto" }}>
       <p style={{ marginBottom: 12 }}>
         <Link to="/customer-accounts">{t("receivable.backCustomers")}</Link>
       </p>

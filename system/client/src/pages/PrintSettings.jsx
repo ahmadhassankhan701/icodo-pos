@@ -5,7 +5,7 @@ import { PRINT_PAPER_KEYS } from "../utils/printPaper.js";
 
 const card = {
   padding: 16,
-  borderRadius: 0,
+  borderRadius: 12,
   border: "1px solid var(--border)",
   background: "var(--surface)",
   maxWidth: 560,
@@ -14,7 +14,7 @@ const card = {
 const sel = {
   minHeight: 44,
   padding: "8px 12px",
-  borderRadius: 0,
+  borderRadius: 12,
   background: "var(--bg)",
   color: "var(--text)",
   border: "1px solid var(--border)",
@@ -48,7 +48,7 @@ export default function PrintSettings() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640, width: "100%", marginInline: "auto" }}>
       <h1 style={{ margin: 0 }}>{t("printSettings.title")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("printSettings.intro")}</p>
 

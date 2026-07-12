@@ -1,80 +1,61 @@
 import React from "react";
 
 /**
- * Ranked list for dashboard "top 10" widgets.
- * @param {{ title: string, rows: Array<{ rank?: number, name: string, value: string, sub?: string }>, emptyLabel: string, metricLabel: string }}
+ * Popular-products style ranked list for the dashboard aside.
  */
-export function TopTenList({ title, rows, emptyLabel, metricLabel }) {
+export function TopTenList({
+  title,
+  rows,
+  emptyLabel,
+  metricLabel,
+  actionLabel,
+  onAction,
+  variant = "default",
+}) {
   return (
-    <div className="card" style={{ minHeight: 280 }}>
-      <div style={{ fontWeight: 800, marginBottom: 12 }}>{title}</div>
+    <div className={`dash-aside-card${variant === "compact" ? " is-compact" : ""}`}>
+      <div className="dash-aside-head">
+        <h3>{title}</h3>
+      </div>
       {!rows?.length ? (
-        <div style={{ color: "var(--muted)", fontSize: 14 }}>{emptyLabel}</div>
+        <div className="dash-empty">{emptyLabel}</div>
       ) : (
-        <ol
-          style={{
-            margin: 0,
-            padding: 0,
-            listStyle: "none",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          {rows.map((row, i) => (
-            <li
-              key={`${row.name}-${i}`}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 12px",
-                background: "var(--surface2)",
-                borderRadius: 0,
-                border: "1px solid var(--border)",
-              }}
-            >
-              <span
-                style={{
-                  flexShrink: 0,
-                  width: 28,
-                  height: 28,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800,
-                  fontSize: 13,
-                  background: i < 3 ? "var(--accent)" : "var(--surface)",
-                  color: i < 3 ? "#fff" : "var(--text)",
-                }}
-              >
-                {row.rank ?? i + 1}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: 14,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={row.name}
-                >
-                  {row.name}
+        <ul className="dash-popular-list">
+          {rows.map((row, i) => {
+            const initials = String(row.name || "?")
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((p) => p[0])
+              .join("")
+              .toUpperCase();
+            const status = row.status || (i % 3 === 2 ? "offline" : "active");
+            return (
+              <li key={`${row.name}-${i}`} className="dash-popular-row">
+                <div className={`dash-popular-thumb tone-${(i % 4) + 1}`} aria-hidden>
+                  {row.avatar ? <img src={row.avatar} alt="" /> : <span>{initials}</span>}
                 </div>
-                {row.sub ? (
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{row.sub}</div>
-                ) : null}
-              </div>
-              <div style={{ textAlign: "end", flexShrink: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 14 }}>{row.value}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>{metricLabel}</div>
-              </div>
-            </li>
-          ))}
-        </ol>
+                <div className="dash-popular-meta">
+                  <div className="dash-popular-name" title={row.name}>
+                    {row.name}
+                  </div>
+                  <div className="dash-popular-sub">
+                    {row.value}
+                    {row.sub ? ` · ${row.sub}` : metricLabel ? ` · ${metricLabel}` : ""}
+                  </div>
+                </div>
+                <span className={`dash-status-pill is-${status}`}>
+                  {row.statusLabel || (status === "active" ? "Active" : "Offline")}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
+      {actionLabel ? (
+        <button type="button" className="dash-aside-action" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 }

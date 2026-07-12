@@ -171,7 +171,7 @@ export default function Reports() {
   const chartData = analytics?.series || [];
 
   return (
-    <div style={{ maxWidth: 1100 }}>
+    <div style={{ maxWidth: 1100, width: "100%", marginInline: "auto" }}>
       <h1 style={{ marginTop: 0 }}>{t("reports.title")}</h1>
       <p style={{ color: "var(--muted)", fontSize: 14, maxWidth: 720 }}>{t("reports.intro")}</p>
 

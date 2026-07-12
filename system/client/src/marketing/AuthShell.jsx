@@ -43,7 +43,7 @@ export function AuthShell({ title, subtitle, children }) {
             </div>
           </div>
           <div className="mkt-auth-visual" aria-hidden="true">
-            <IcodoLogo variant="dark" height={140} className="mkt-auth-logo" />
+            <IcodoLogo variant="dark" width={260} className="mkt-auth-logo" />
             <h2>{c.auth.visualTitle}</h2>
             <p>{c.auth.visualBody}</p>
           </div>

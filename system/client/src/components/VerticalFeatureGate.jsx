@@ -9,7 +9,7 @@ import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 export function VerticalFeatureGate({ feature, children }) {
   const { user } = useAuth();
   if (!isVerticalFeatureEnabled(feature, user?.businessVertical)) {
-    return <Navigate to="/pos" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   return children;
 }
