@@ -7,6 +7,7 @@ export default function Users() {
   const { t, locale } = useI18n();
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [formError, setFormError] = useState("");
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -24,13 +25,38 @@ export default function Users() {
 
   const create = async (e) => {
     e.preventDefault();
-    await api("/api/users", { method: "POST", body: { ...form, branchId: form.branchId || null } });
-    setForm({ email: "", password: "", name: "", role: "CASHIER", branchId: "" });
-    await load();
+    setFormError("");
+    if (form.role !== "ADMIN" && !form.branchId) {
+      setFormError(t("users.branchRequired"));
+      return;
+    }
+    try {
+      await api("/api/users", {
+        method: "POST",
+        body: { ...form, branchId: form.branchId || null },
+      });
+      setForm({ email: "", password: "", name: "", role: "CASHIER", branchId: "" });
+      await load();
+    } catch (err) {
+      setFormError(err.message || "Failed");
+    }
   };
 
   const updateRole = async (u, role) => {
     await api(`/api/users/${u.id}`, { method: "PATCH", body: { role } });
+    await load();
+  };
+
+  const updateBranch = async (u, branchId) => {
+    if (u.role !== "ADMIN" && !branchId) {
+      alert(t("users.branchRequired"));
+      await load();
+      return;
+    }
+    await api(`/api/users/${u.id}`, {
+      method: "PATCH",
+      body: { branchId: branchId || null },
+    });
     await load();
   };
 
@@ -46,6 +72,9 @@ export default function Users() {
 
       <form className="card" onSubmit={create} style={{ display: "grid", gap: 10 }}>
         <strong>{t("users.newUser")}</strong>
+        {formError ? (
+          <div style={{ color: "var(--danger)", fontSize: 13 }}>{formError}</div>
+        ) : null}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
           <input
             placeholder={t("products.name")}
@@ -71,12 +100,19 @@ export default function Users() {
             style={inp}
           />
           <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} style={inp}>
-            <option value="ADMIN">Admin</option>
-            <option value="MANAGER">Manager</option>
-            <option value="CASHIER">Cashier</option>
+            <option value="ADMIN">{t("role.ADMIN")}</option>
+            <option value="MANAGER">{t("role.MANAGER")}</option>
+            <option value="CASHIER">{t("role.CASHIER")}</option>
           </select>
-          <select value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })} style={inp}>
-            <option value="">{t("users.noBranch")}</option>
+          <select
+            value={form.branchId}
+            onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+            required={form.role !== "ADMIN"}
+            style={inp}
+          >
+            <option value="">
+              {form.role === "ADMIN" ? t("users.noBranch") : t("users.pickBranch")}
+            </option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {branchDisplayName(b, locale)}
@@ -111,15 +147,30 @@ export default function Users() {
                     onChange={(e) => updateRole(u, e.target.value)}
                     style={{ ...inp, minWidth: 120 }}
                   >
-                    <option value="ADMIN">Admin</option>
-                    <option value="MANAGER">Manager</option>
-                    <option value="CASHIER">Cashier</option>
+                    <option value="ADMIN">{t("role.ADMIN")}</option>
+                    <option value="MANAGER">{t("role.MANAGER")}</option>
+                    <option value="CASHIER">{t("role.CASHIER")}</option>
                   </select>
                   <span style={{ fontSize: 11, color: "var(--muted)", marginInlineStart: 8 }}>
                     ({t(`role.${u.role}`)})
                   </span>
                 </td>
-                <td style={td}>{u.branch?.name || t("common.none")}</td>
+                <td style={td}>
+                  <select
+                    value={u.branchId || ""}
+                    onChange={(e) => updateBranch(u, e.target.value)}
+                    style={{ ...inp, minWidth: 160 }}
+                  >
+                    <option value="">
+                      {u.role === "ADMIN" ? t("users.noBranch") : t("users.pickBranch")}
+                    </option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {branchDisplayName(b, locale)}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td style={td}>
                   <button type="button" className="btn-touch" style={{ background: "var(--danger)" }} onClick={() => del(u.id)}>
                     {t("common.delete")}

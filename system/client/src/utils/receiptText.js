@@ -32,7 +32,8 @@ export function buildReceiptPlainText(sale, branchName, locale) {
   const lines = [];
   lines.push(locale === "en" ? "SALES INVOICE" : "فاتورة بيع");
   lines.push("---");
-  lines.push(`${locale === "en" ? "Branch" : "الفرع"}: ${branchName || sale.branch?.name || "—"}`);
+  const storeLine = branchName || sale.branch?.name || "";
+  if (storeLine) lines.push(storeLine);
   lines.push(`${locale === "en" ? "Date" : "التاريخ"}: ${new Date(sale.createdAt).toLocaleString(loc)}`);
   lines.push(`${locale === "en" ? "Invoice #" : "رقم الفاتورة"}: ${sale.id}`);
   lines.push(`${locale === "en" ? "Cashier" : "الكاشير"}: ${sale.user?.name || "—"}`);

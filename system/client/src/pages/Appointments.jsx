@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 const inp = {
   padding: 12,
@@ -20,9 +21,8 @@ function toInputDateTimeLocal(d) {
 
 export default function Appointments() {
   const { t } = useI18n();
-  const { user, isAdmin } = useAuth();
-  const [branchId, setBranchId] = useState(user?.branchId || "");
-  const [branches, setBranches] = useState([]);
+  const { user } = useAuth();
+  const branchId = useActiveBranchId();
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [services, setServices] = useState([]);
@@ -52,28 +52,22 @@ export default function Appointments() {
   );
 
   useEffect(() => {
-    api("/api/branches")
-      .then((bs) => {
-        setBranches(bs || []);
-        if (isAdmin && !branchId && bs?.[0]?.id) setBranchId(bs[0].id);
-      })
-      .catch(() => setBranches([]));
     api("/api/customers").then(setCustomers).catch(() => setCustomers([]));
     api("/api/employees").then(setEmployees).catch(() => setEmployees([]));
-  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     const q = new URLSearchParams();
     q.set("branchId", bid);
     api(`/api/appointments/services?${q.toString()}`)
       .then(setServices)
       .catch(() => setServices([]));
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   const loadAppointments = async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     const q = new URLSearchParams();
     q.set("branchId", bid);
@@ -84,10 +78,10 @@ export default function Appointments() {
 
   useEffect(() => {
     loadAppointments().catch(() => setList([]));
-  }, [branchId, user?.branchId, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [branchId, day]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createService = async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     const name = window.prompt(t("appointments.promptServiceName"));
     if (!name?.trim()) return;
     const durationMin = Number(window.prompt(t("appointments.promptDuration"), "60") || "60");
@@ -114,7 +108,7 @@ export default function Appointments() {
     e.preventDefault();
     setMsg("");
     try {
-      const bid = branchId || user?.branchId;
+      const bid = branchId;
       await api("/api/appointments", {
         method: "POST",
         body: {
@@ -155,19 +149,6 @@ export default function Appointments() {
 
       <form className="card" onSubmit={submit} style={{ display: "grid", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {isAdmin ? (
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              style={{ ...inp, minWidth: 180 }}
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
           <select
             value={form.customerId}
             onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}

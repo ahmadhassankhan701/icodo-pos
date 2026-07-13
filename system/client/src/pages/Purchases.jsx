@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 const inp = {
   padding: 12,
@@ -13,10 +14,9 @@ const inp = {
 
 export default function Purchases() {
   const { t } = useI18n();
-  const { user, isAdmin } = useAuth();
-  const [branches, setBranches] = useState([]);
+  const { user } = useAuth();
+  const branchId = useActiveBranchId();
   const [suppliers, setSuppliers] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
   const [supplierId, setSupplierId] = useState("");
   const [products, setProducts] = useState([]);
   const [lines, setLines] = useState([{ productId: "", quantity: "1", unitCost: "", expiryDate: "" }]);
@@ -32,29 +32,23 @@ export default function Purchases() {
   const [autoLoading, setAutoLoading] = useState(false);
 
   useEffect(() => {
-    api("/api/branches")
-      .then((bs) => {
-        setBranches(bs);
-        if (user?.role === "ADMIN" && !branchId && bs[0]) setBranchId(bs[0].id);
-      })
-      .catch(() => {});
     api("/api/suppliers")
       .then(setSuppliers)
       .catch(() => setSuppliers([]));
-  }, [user?.role]);
+  }, []);
 
   useEffect(() => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     const q = new URLSearchParams();
     q.set("branchId", bid);
     api(`/api/products?${q.toString()}`)
       .then(setProducts)
       .catch(() => setProducts([]));
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   const loadPurchases = () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     const p = new URLSearchParams();
     if (bid) p.set("branchId", bid);
     return api(`/api/purchases?${p.toString()}`).then(setList);
@@ -62,7 +56,7 @@ export default function Purchases() {
 
   useEffect(() => {
     loadPurchases().catch(() => setList([]));
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   const addSupplier = async (e) => {
     e.preventDefault();
@@ -79,7 +73,7 @@ export default function Purchases() {
   const submit = async (e) => {
     e.preventDefault();
     setMsg("");
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) {
       setMsg(t("purchases.needBranch"));
       return;
@@ -117,7 +111,7 @@ export default function Purchases() {
   };
 
   const loadAutoRecommendations = async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) {
       setMsg(t("purchases.needBranch"));
       return;
@@ -146,7 +140,7 @@ export default function Purchases() {
   };
 
   const receiveRecommendations = async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     const items = recommendations
       .filter((r) => selectedRecommendations[r.productId]?.checked)
@@ -312,18 +306,6 @@ export default function Purchases() {
       </div>
 
       <form className="card" onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-        {isAdmin ? (
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={{ ...inp, minHeight: 44 }}>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("purchases.supplierOptional")}</span>
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={{ ...inp, minHeight: 44 }}>

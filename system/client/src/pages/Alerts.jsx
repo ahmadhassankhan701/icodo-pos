@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { listSyncQueueRows } from "../offline/syncQueueList.js";
 import { addLocalReadKeys, getLocalReadKeySet } from "../alerts/localRead.js";
 
@@ -20,11 +22,11 @@ function severityColor(sev) {
 
 export default function Alerts() {
   const { t, locale } = useI18n();
+  const { user } = useAuth();
+  const branchId = useActiveBranchId();
   const nav = useNavigate();
   const [localReadTick, setLocalReadTick] = useState(0);
 
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState("");
   const [typeLow, setTypeLow] = useState(true);
   const [typeExp, setTypeExp] = useState(true);
   const [typeCash, setTypeCash] = useState(true);
@@ -70,12 +72,6 @@ export default function Alerts() {
       setLoading(false);
     }
   }, [branchId, typesParam, skipServerTypes]);
-
-  useEffect(() => {
-    api("/api/branches")
-      .then(setBranches)
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     load();
@@ -144,16 +140,13 @@ export default function Alerts() {
         locale === "en" && it.payload?.productNameEn
           ? it.payload.productNameEn
           : it.payload?.productName;
-      const days = it.payload?.daysUntilExpiry;
       if (it.payload?.status === "expired") {
         return t("alerts.title.expiryExpired", { name: name || "—" });
       }
-      return t("alerts.title.expirySoon", { name: name || "—", days: String(days ?? "") });
+      return t("alerts.title.expiryToday", { name: name || "—" });
     }
     if (it.type === "CASH_NO_SESSION") {
-      const bn =
-        locale === "en" && it.branchNameEn ? it.branchNameEn : it.branchName;
-      return t("alerts.title.cashNoSession", { branch: bn || "—" });
+      return t("alerts.title.cashNoSession");
     }
     if (it.type === "SYNC_QUEUE") {
       return t("alerts.title.sync", { type: String(it.payload?.syncType || "") });
@@ -239,24 +232,6 @@ export default function Alerts() {
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("alerts.intro")}</p>
 
       <div style={{ ...card, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-          <span>{t("alerts.filterBranch")}</span>
-          <select
-            className="btn-touch"
-            style={{ minWidth: 160, padding: "8px 10px" }}
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-          >
-            <option value="">{t("nav.allBranches")}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {locale === "en" && b.nameEn ? b.nameEn : b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <span style={{ color: "var(--muted)" }}>|</span>
         <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" checked={typeLow} onChange={(e) => setTypeLow(e.target.checked)} />
           {t("alerts.type.lowStock")}
@@ -321,13 +296,6 @@ export default function Alerts() {
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{formatTitle(it)}</div>
                     <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>{formatBody(it)}</div>
                     <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
-                      {it.branchName ? (
-                        <span>
-                          {t("invoice.branch")}{" "}
-                          {locale === "en" && it.branchNameEn ? it.branchNameEn : it.branchName}
-                        </span>
-                      ) : null}
-                      {it.branchName ? " · " : null}
                       {new Date(it.at).toLocaleString(locale === "en" ? "en-GB" : "ar-SA")}
                     </div>
                   </div>

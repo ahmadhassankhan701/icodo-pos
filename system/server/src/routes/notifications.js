@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { calendarDaysUntilExpiryUTC, DEFAULT_ALERT_DAYS } from "../lib/productExpiry.js";
+import { calendarDaysUntilExpiryUTC } from "../lib/productExpiry.js";
 import { resolveStoredImageUrl } from "../lib/productImageUrl.js";
 
 const router = Router();
@@ -123,10 +123,8 @@ async function buildItems(req, types) {
     });
     for (const p of products) {
       const days = calendarDaysUntilExpiryUTC(p.expiryDate);
-      if (days === null) continue;
-      const windowDays = p.expiryAlertDaysBefore ?? DEFAULT_ALERT_DAYS;
-      if (days > windowDays) continue;
-      const status = days < 0 ? "expired" : "soon";
+      if (days === null || days > 0) continue;
+      const status = days < 0 ? "expired" : "today";
       items.push({
         key: `expiry:${p.id}`,
         type: "EXPIRY",
@@ -142,7 +140,6 @@ async function buildItems(req, types) {
           sku: p.sku,
           daysUntilExpiry: days,
           status,
-          alertDays: windowDays,
           imageUrl: resolveStoredImageUrl(p.imageUrl),
         },
         action: { path: "/products", hash: "expiry" },

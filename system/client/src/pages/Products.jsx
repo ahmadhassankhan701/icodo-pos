@@ -2,61 +2,95 @@ import React, { useEffect, useRef, useState } from "react";
 import { api, apiBlob, apiUploadExcel } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { useToast } from "../context/ToastContext.jsx";
 import { productDisplayName } from "../utils/productName.js";
-import { branchDisplayName } from "../utils/displayLabels.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { ProductImagePreview } from "../components/ProductImagePreview.jsx";
 
-const PET_KEYS = { CAT: "pet.cat", DOG: "pet.dog", OTHER: "pet.other" };
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-export default function Products() {
-  const { user, isManager, isAdmin } = useAuth();
-  const { t, locale } = useI18n();
-  const [branches, setBranches] = useState([]);
-  const [filterBranchId, setFilterBranchId] = useState("");
-  const [list, setList] = useState([]);
-  const [low, setLow] = useState([]);
-  const [expiring, setExpiring] = useState([]);
-  const [form, setForm] = useState({
+function emptyProductForm() {
+  return {
     name: "",
     nameEn: "",
     price: "",
     wholesalePrice: "",
     cost: "",
-    petType: "OTHER",
-    category: "",
+    categoryId: "",
+    subcategoryId: "",
     imageUrl: "",
     sku: "",
     barcode: "",
-    branchId: "",
-    initialStock: "0",
-    minStockLevel: "5",
-    expiryDate: "",
-    expiryAlertDaysBefore: "",
-  });
-  const [editing, setEditing] = useState(null);
+    initialStock: "",
+    minStockLevel: "",
+    expiryDate: todayISO(),
+  };
+}
+
+export default function Products() {
+  const { user, isAdmin, can } = useAuth();
+  const { t, locale } = useI18n();
+  const { showToast } = useToast();
+  const [list, setList] = useState([]);
+  const [low, setLow] = useState([]);
+  const [form, setForm] = useState(() => emptyProductForm());
+  const [formMode, setFormMode] = useState(null); // null | "create" | "edit"
+  const [editId, setEditId] = useState("");
+  const [formError, setFormError] = useState("");
+  const [formBusy, setFormBusy] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
-  const [excelBranchId, setExcelBranchId] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [excelBusy, setExcelBusy] = useState(false);
   const fileRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [lotsView, setLotsView] = useState({ productId: "", productName: "", branchId: "", lots: [], loading: false, error: "" });
+  const [catalog, setCatalog] = useState({ categories: [], subcategories: [], skus: [] });
+
+  const activeBranchId = useActiveBranchId();
+  const canEditProducts = can("productsEdit");
+
+  const catalogLabel = (row) => {
+    if (!row) return "";
+    if (locale === "en" && row.nameEn?.trim()) return row.nameEn.trim();
+    return row.name || row.nameEn || "";
+  };
+
+  const modalSubs = catalog.subcategories.filter((s) => !form.categoryId || s.categoryId === form.categoryId);
+  const modalSkus = catalog.skus.filter(
+    (s) => !form.subcategoryId || !s.subcategoryId || s.subcategoryId === form.subcategoryId
+  );
+
+  const loadCatalog = async () => {
+    const data = await api("/api/catalog");
+    setCatalog({
+      categories: Array.isArray(data?.categories) ? data.categories : [],
+      subcategories: Array.isArray(data?.subcategories) ? data.subcategories : [],
+      skus: Array.isArray(data?.skus) ? data.skus : [],
+    });
+  };
 
   const load = async () => {
-    const bid = isAdmin ? filterBranchId || "" : user?.branchId || "";
+    const bid = activeBranchId;
     const qs = new URLSearchParams();
     if (bid) qs.set("branchId", bid);
+    if (search) qs.set("search", search);
     qs.set("includeInactive", "1");
     qs.set("page", String(page));
     qs.set("pageSize", String(pageSize));
     qs.set("paginate", "1");
     const q = qs.toString() ? `?${qs.toString()}` : "";
-    const [res, l, ex] = await Promise.all([
+    const [res, l] = await Promise.all([
       api(`/api/products${q}`),
       api(`/api/inventory/low-stock${bid ? `?branchId=${bid}` : ""}`),
-      api(`/api/inventory/expiry-alerts${bid ? `?branchId=${encodeURIComponent(bid)}` : ""}`).catch(() => []),
     ]);
     if (res && Array.isArray(res.items)) {
       setList(res.items);
@@ -66,110 +100,170 @@ export default function Products() {
       setTotal(Array.isArray(res) ? res.length : 0);
     }
     setLow(l);
-    setExpiring(Array.isArray(ex) ? ex : []);
   };
-
-  useEffect(() => {
-    api("/api/branches").then(setBranches).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!branches.length) return;
-    setExcelBranchId((prev) => {
-      if (prev) return prev;
-      if (isAdmin && filterBranchId) return filterBranchId;
-      if (user?.branchId) return user.branchId;
-      return branches[0].id;
-    });
-  }, [branches, filterBranchId, isAdmin, user?.branchId]);
 
   useEffect(() => {
     setPage(1);
   }, [user?.id]);
 
   useEffect(() => {
-    load().catch(() => {});
-  }, [user?.branchId, filterBranchId, isAdmin, page, pageSize]);
+    const timer = setTimeout(() => {
+      const next = searchInput.trim();
+      setSearch((prev) => {
+        if (prev !== next) setPage(1);
+        return next;
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const saveNew = async (e) => {
-    e.preventDefault();
-    const bid = form.branchId || user?.branchId;
-    if (!bid) {
-      alert(t("products.pickBranch"));
-      return;
-    }
-    await api("/api/products", {
-      method: "POST",
-      body: {
-        ...form,
-        branchId: bid,
-        price: Number(form.price),
-        wholesalePrice: form.wholesalePrice === "" ? null : Number(form.wholesalePrice),
-        cost: form.cost === "" ? null : Number(form.cost),
-        nameEn: form.nameEn?.trim() || null,
-        expiryDate: form.expiryDate?.trim() || null,
-        expiryAlertDaysBefore: form.expiryDate?.trim()
-          ? form.expiryAlertDaysBefore !== ""
-            ? Number(form.expiryAlertDaysBefore)
-            : undefined
-          : null,
-      },
-    });
-    setForm({
-      name: "",
-      nameEn: "",
-      price: "",
-      wholesalePrice: "",
-      cost: "",
-      petType: "OTHER",
-      category: "",
-      imageUrl: "",
-      sku: "",
-      barcode: "",
-      branchId: form.branchId,
-      initialStock: "0",
-      minStockLevel: "5",
-      expiryDate: "",
-      expiryAlertDaysBefore: "",
-    });
-    await load();
+  useEffect(() => {
+    loadCatalog().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    load().catch(() => {});
+  }, [activeBranchId, page, pageSize, search]);
+
+  const closeFormModal = () => {
+    setFormMode(null);
+    setEditId("");
+    setFormError("");
+    setForm(emptyProductForm());
   };
 
-  const patch = async () => {
-    if (!editing) return;
-    await api(`/api/products/${editing.id}`, {
-      method: "PATCH",
-      body: {
-        name: editing.name,
-        nameEn: editing.nameEn?.trim() || null,
-        price: Number(editing.price),
-        wholesalePrice: editing.wholesalePrice === "" ? null : Number(editing.wholesalePrice),
-        cost: editing.cost === "" ? null : Number(editing.cost),
-        expiryDate: editing.expiryDate === "" ? null : editing.expiryDate,
-        expiryAlertDaysBefore:
-          editing.expiryDate && editing.expiryAlertDaysBefore !== ""
-            ? Number(editing.expiryAlertDaysBefore)
-            : editing.expiryDate
-              ? undefined
-              : null,
-        petType: editing.petType,
-        category: editing.category?.trim() || null,
-        imageUrl: editing.imageUrl,
-        sku: editing.sku,
-        barcode: editing.barcode,
-      },
+  const openCreateModal = () => {
+    setForm(emptyProductForm());
+    setEditId("");
+    setFormError("");
+    setFormMode("create");
+  };
+
+  const openEditModal = (p) => {
+    setForm({
+      name: p.name && p.nameEn && p.name === p.nameEn ? "" : p.name || "",
+      nameEn: p.nameEn || "",
+      price: String(p.price ?? ""),
+      wholesalePrice: p.wholesalePrice != null ? String(p.wholesalePrice) : "",
+      cost: p.cost != null ? String(p.cost) : "",
+      categoryId: p.categoryId || "",
+      subcategoryId: p.subcategoryId || "",
+      imageUrl: p.imageUrl || "",
+      sku: p.sku || "",
+      barcode: p.barcode || "",
+      initialStock: "",
+      minStockLevel: "",
+      expiryDate: p.expiryDate ? String(p.expiryDate).slice(0, 10) : todayISO(),
     });
-    setEditing(null);
-    await load();
+    setEditId(p.id);
+    setFormError("");
+    setFormMode("edit");
+  };
+
+  const validateProductFields = (data) => {
+    const nameEn = String(data.nameEn || "").trim();
+    if (!nameEn || nameEn.length < 2) return t("products.nameEnRequired");
+    if (data.name && String(data.name).trim().length > 120) return t("products.errNameLong");
+    const price = Number(data.price);
+    if (data.price === "" || Number.isNaN(price) || price < 0) return t("products.errPrice");
+    if (data.cost !== "" && data.cost != null) {
+      const c = Number(data.cost);
+      if (Number.isNaN(c) || c < 0) return t("products.errCost");
+    }
+    if (data.wholesalePrice !== "" && data.wholesalePrice != null) {
+      const w = Number(data.wholesalePrice);
+      if (Number.isNaN(w) || w < 0) return t("products.errWholesale");
+    }
+    if (!data.categoryId) return t("products.categoryRequired");
+    const img = String(data.imageUrl || "").trim();
+    if (!img) return t("products.imageUrlRequired");
+    if (!/^https?:\/\/\S+/i.test(img) && !img.startsWith("/")) return t("products.errImageUrl");
+    if (data.initialStock != null && data.initialStock !== "") {
+      const s = Number(data.initialStock);
+      if (Number.isNaN(s) || s < 0 || !Number.isInteger(s)) return t("products.errStock");
+    }
+    if (data.minStockLevel != null && data.minStockLevel !== "") {
+      const m = Number(data.minStockLevel);
+      if (Number.isNaN(m) || m < 0 || !Number.isInteger(m)) return t("products.errMinStock");
+    }
+    return "";
+  };
+
+  const submitProductForm = async (e) => {
+    e.preventDefault();
+    setFormError("");
+    const err = validateProductFields(form);
+    if (err) {
+      setFormError(err);
+      return;
+    }
+    setFormBusy(true);
+    try {
+      if (formMode === "create") {
+        const bid = activeBranchId;
+        if (!bid) {
+          setFormError(t("products.pickBranch"));
+          return;
+        }
+        await api("/api/products", {
+          method: "POST",
+          body: {
+            name: form.name?.trim() || "",
+            nameEn: form.nameEn.trim(),
+            price: Number(form.price),
+            wholesalePrice: form.wholesalePrice === "" ? null : Number(form.wholesalePrice),
+            cost: form.cost === "" ? null : Number(form.cost),
+            categoryId: form.categoryId || null,
+            subcategoryId: form.subcategoryId || null,
+            sku: form.sku || null,
+            barcode: form.barcode || null,
+            imageUrl: form.imageUrl.trim(),
+            branchId: bid,
+            petType: "OTHER",
+            initialStock: form.initialStock === "" ? 0 : Number(form.initialStock),
+            minStockLevel: form.minStockLevel === "" ? 5 : Number(form.minStockLevel),
+            expiryDate: form.expiryDate?.trim() || null,
+          },
+        });
+        showToast(t("products.toastCreated"), "success");
+      } else if (formMode === "edit" && editId) {
+        await api(`/api/products/${editId}`, {
+          method: "PATCH",
+          body: {
+            name: form.name?.trim() || "",
+            nameEn: form.nameEn.trim(),
+            price: Number(form.price),
+            wholesalePrice: form.wholesalePrice === "" ? null : Number(form.wholesalePrice),
+            cost: form.cost === "" ? null : Number(form.cost),
+            expiryDate: form.expiryDate === "" ? null : form.expiryDate,
+            petType: "OTHER",
+            categoryId: form.categoryId || null,
+            subcategoryId: form.subcategoryId || null,
+            imageUrl: String(form.imageUrl || "").trim(),
+            sku: form.sku || null,
+            barcode: form.barcode,
+          },
+        });
+        showToast(t("products.toastUpdated"), "success");
+      }
+      closeFormModal();
+      await load();
+    } catch (ex) {
+      setFormError(ex.message || t("products.saveFailed"));
+      showToast(ex.message || t("products.saveFailed"), "error");
+    } finally {
+      setFormBusy(false);
+    }
   };
 
   const remove = async (id) => {
     if (!confirm(t("products.confirmDelete"))) return;
     try {
       await api(`/api/products/${id}`, { method: "DELETE" });
+      showToast(t("products.toastDeleted"), "success");
       await load();
     } catch (e) {
-      alert(e.message || t("products.deleteFailed"));
+      showToast(e.message || t("products.deleteFailed"), "error");
     }
   };
 
@@ -179,9 +273,10 @@ export default function Products() {
         method: "PATCH",
         body: { isActive: !p.isActive },
       });
+      showToast(p.isActive ? t("products.toastDisabled") : t("products.toastEnabled"), "success");
       await load();
     } catch (e) {
-      alert(e.message || t("products.saveFailed"));
+      showToast(e.message || t("products.saveFailed"), "error");
     }
   };
 
@@ -195,19 +290,17 @@ export default function Products() {
     );
   };
 
-  const generateBarcode = async (mode) => {
+  const generateBarcode = async () => {
     try {
-      if (mode === "new") {
-        const { barcode: b } = await api("/api/products/generate-barcode");
-        setForm((f) => ({ ...f, barcode: b }));
-      } else if (mode === "edit" && editing?.id) {
-        const { barcode: b } = await api(
-          `/api/products/generate-barcode?excludeProductId=${encodeURIComponent(editing.id)}`
-        );
-        setEditing((e) => (e ? { ...e, barcode: b } : e));
-      }
+      const qs =
+        formMode === "edit" && editId
+          ? `?excludeProductId=${encodeURIComponent(editId)}`
+          : "";
+      const { barcode: b } = await api(`/api/products/generate-barcode${qs}`);
+      setForm((f) => ({ ...f, barcode: b }));
+      showToast(t("products.toastBarcode"), "success");
     } catch (e) {
-      alert(e?.message || t("products.generateBarcodeFailed"));
+      showToast(e?.message || t("products.generateBarcodeFailed"), "error");
     }
   };
 
@@ -239,10 +332,10 @@ export default function Products() {
       }
       setSelectedIds([]);
       await load();
-      if (ok < n) alert(t("products.bulkFailed"));
-      else alert(t("products.bulkDone", { n: ok }));
+      if (ok < n) showToast(t("products.bulkFailed"), "error");
+      else showToast(t("products.bulkDone", { n: ok }), "success");
     } catch (e) {
-      alert(e.message || t("products.bulkFailed"));
+      showToast(e.message || t("products.bulkFailed"), "error");
     } finally {
       setBulkBusy(false);
     }
@@ -268,10 +361,10 @@ export default function Products() {
       }
       setSelectedIds([]);
       await load();
-      if (ok < toDelete.length) alert(t("products.bulkFailed"));
-      else alert(t("products.bulkDone", { n: ok }));
+      if (ok < toDelete.length) showToast(t("products.bulkFailed"), "error");
+      else showToast(t("products.bulkDone", { n: ok }), "success");
     } catch (e) {
-      alert(e.message || t("products.bulkFailed"));
+      showToast(e.message || t("products.bulkFailed"), "error");
     } finally {
       setBulkBusy(false);
     }
@@ -288,49 +381,15 @@ export default function Products() {
     }
   };
 
-  const lotStatus = (expiryIso) => {
-    if (!expiryIso) return { key: "none", label: "No expiry", color: "var(--muted)" };
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const exp = new Date(expiryIso);
-    exp.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
-    if (diffDays < 0) return { key: "expired", label: `Expired ${Math.abs(diffDays)}d`, color: "var(--danger)" };
-    if (diffDays <= 14) return { key: "soon", label: `Expiring in ${diffDays}d`, color: "var(--warning)" };
-    return { key: "ok", label: `${diffDays}d left`, color: "var(--success)" };
-  };
-
-  const openLots = async (productId, productName) => {
-    const bid = isAdmin ? filterBranchId || user?.branchId || "" : user?.branchId || "";
-    if (!bid) {
-      alert(t("products.pickBranch"));
-      return;
-    }
-    setLotsView({ productId, productName, branchId: bid, lots: [], loading: true, error: "" });
-    try {
-      const res = await api(`/api/products/${encodeURIComponent(productId)}/lots?branchId=${encodeURIComponent(bid)}`);
-      setLotsView({
-        productId,
-        productName,
-        branchId: bid,
-        lots: Array.isArray(res?.lots) ? res.lots : [],
-        loading: false,
-        error: "",
-      });
-    } catch (e) {
-      setLotsView({ productId, productName, branchId: bid, lots: [], loading: false, error: e.message || "Failed to load lots" });
-    }
-  };
-
   const downloadExcel = async () => {
-    if (!excelBranchId) {
-      alert(t("products.excelPickBranch"));
+    if (!activeBranchId) {
+      showToast(t("products.excelPickBranch"), "error");
       return;
     }
     setExcelBusy(true);
     try {
       const blob = await apiBlob(
-        `/api/products/export/excel?branchId=${encodeURIComponent(excelBranchId)}`
+        `/api/products/export/excel?branchId=${encodeURIComponent(activeBranchId)}`
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -338,8 +397,9 @@ export default function Products() {
       a.download = "products-export.xlsx";
       a.click();
       URL.revokeObjectURL(url);
+      showToast(t("products.toastExported"), "success");
     } catch (e) {
-      alert(e.message || "Export failed");
+      showToast(e.message || "Export failed", "error");
     } finally {
       setExcelBusy(false);
     }
@@ -348,13 +408,13 @@ export default function Products() {
   const onExcelFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !excelBranchId) {
-      if (!excelBranchId) alert(t("products.excelPickBranch"));
+    if (!file || !activeBranchId) {
+      if (!activeBranchId) showToast(t("products.excelPickBranch"), "error");
       return;
     }
     setExcelBusy(true);
     try {
-      const r = await apiUploadExcel("/api/products/import/excel", file, excelBranchId);
+      const r = await apiUploadExcel("/api/products/import/excel", file, activeBranchId);
       const msg = t("products.excelResult", {
         created: r.created ?? 0,
         updated: r.updated ?? 0,
@@ -364,10 +424,10 @@ export default function Products() {
         r.errors?.length > 0
           ? `\n${r.errors.slice(0, 5).map((x) => `صف ${x.row}: ${x.message}`).join("\n")}${r.errors.length > 5 ? "\n…" : ""}`
           : "";
-      alert(msg + detail);
+      showToast(msg + detail, (r.errorCount ?? 0) > 0 ? "info" : "success", { duration: 5000 });
       await load();
     } catch (err) {
-      alert(err.message || "Import failed");
+      showToast(err.message || "Import failed", "error");
     } finally {
       setExcelBusy(false);
     }
@@ -377,63 +437,45 @@ export default function Products() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
         <h1 style={{ margin: 0 }}>{t("products.title")}</h1>
-        {isAdmin ? (
-          <select
-            value={filterBranchId}
-            onChange={(e) => {
-              setFilterBranchId(e.target.value);
-              setPage(1);
-            }}
-            style={{
-              minHeight: 44,
-              padding: "8px 12px",
-              borderRadius: 12,
-              background: "var(--surface)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-            }}
+        <input
+          type="search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder={t("products.searchPlaceholder")}
+          aria-label={t("products.searchPlaceholder")}
+          style={{
+            flex: "1 1 220px",
+            minWidth: 180,
+            maxWidth: 360,
+            minHeight: 44,
+            padding: "0.55rem 0.85rem",
+            borderRadius: "var(--radius)",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            color: "var(--text)",
+          }}
+        />
+        {canEditProducts ? (
+          <button
+            type="button"
+            className="btn-touch"
+            onClick={openCreateModal}
+            style={{ background: "var(--accent)", color: "#fff", marginInlineStart: "auto" }}
           >
-            <option value="">{t("products.filterAllBranches")}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {t("products.stockPrefix")} {branchDisplayName(b, locale)}
-              </option>
-            ))}
-          </select>
+            {t("products.addProduct")}
+          </button>
         ) : null}
       </div>
 
-      {isManager ? (
+      {canEditProducts ? (
         <div className="card" style={{ display: "grid", gap: 10 }}>
           <strong>{t("products.excelTitle")}</strong>
           <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>{t("products.excelHint")}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 200 }}>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("products.excelBranch")}</span>
-              <select
-                value={excelBranchId}
-                onChange={(e) => setExcelBranchId(e.target.value)}
-                disabled={excelBusy}
-                style={{
-                  minHeight: 44,
-                  padding: "8px 12px",
-                  borderRadius: 12,
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {branchDisplayName(b, locale)}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button
               type="button"
               className="btn-touch"
-              disabled={excelBusy || !excelBranchId}
+              disabled={excelBusy || !activeBranchId}
               onClick={downloadExcel}
               style={{ background: "var(--surface2)", color: "var(--text)", minHeight: 44 }}
             >
@@ -449,7 +491,7 @@ export default function Products() {
             <button
               type="button"
               className="btn-touch"
-              disabled={excelBusy || !excelBranchId}
+              disabled={excelBusy || !activeBranchId}
               onClick={() => fileRef.current?.click()}
               style={{ background: "var(--accent)", color: "#fff", minHeight: 44 }}
             >
@@ -469,7 +511,6 @@ export default function Products() {
                   name: r.product.name,
                   qty: r.quantity,
                   min: r.minStockLevel,
-                  branch: branchDisplayName(r.branch, locale),
                 })}
               </li>
             ))}
@@ -477,175 +518,8 @@ export default function Products() {
         </div>
       ) : null}
 
-      {expiring.length ? (
-        <div className="card" style={{ borderInlineStart: "4px solid var(--danger)" }}>
-          <strong>{t("products.expiringTitle")}</strong>
-          <ul style={{ margin: "8px 0 0", paddingInlineStart: 20 }}>
-            {expiring.slice(0, 12).map((row) => (
-              <li
-                key={row.product.id}
-                style={{
-                  color: row.status === "expired" ? "var(--danger)" : "var(--warning)",
-                  fontWeight: row.status === "expired" ? 700 : 600,
-                }}
-              >
-                {row.status === "expired"
-                  ? t("products.expiryLineExpired", {
-                      name: row.product.name,
-                      days: Math.abs(row.daysUntilExpiry),
-                    })
-                  : t("products.expiryLineSoon", {
-                      name: row.product.name,
-                      days: row.daysUntilExpiry,
-                      alertDays: row.alertDays,
-                    })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {isManager ? (
-        <form className="card" onSubmit={saveNew} style={{ display: "grid", gap: 10 }}>
-          <strong>{t("products.addProduct")}</strong>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-            <input
-              placeholder={t("products.name")}
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.nameEnField")}
-              value={form.nameEn}
-              onChange={(e) => setForm({ ...form, nameEn: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.purchasePrice")}
-              type="number"
-              step="0.01"
-              value={form.cost}
-              onChange={(e) => setForm({ ...form, cost: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.retailPrice")}
-              required
-              type="number"
-              step="0.01"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.wholesalePrice")}
-              type="number"
-              step="0.01"
-              value={form.wholesalePrice}
-              onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })}
-              style={inp}
-            />
-            <input
-              type="date"
-              value={form.expiryDate}
-              onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
-              style={inp}
-              title={t("products.expiryDate")}
-            />
-            <input
-              placeholder={t("products.expiryAlertDays")}
-              type="number"
-              min={0}
-              step={1}
-              value={form.expiryAlertDaysBefore}
-              onChange={(e) => setForm({ ...form, expiryAlertDaysBefore: e.target.value })}
-              style={inp}
-              disabled={!form.expiryDate}
-            />
-            <select
-              value={form.petType}
-              onChange={(e) => setForm({ ...form, petType: e.target.value })}
-              style={inp}
-            >
-              <option value="CAT">{t("pet.cat")}</option>
-              <option value="DOG">{t("pet.dog")}</option>
-              <option value="OTHER">{t("pet.other")}</option>
-            </select>
-            <input
-              placeholder={t("products.category")}
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.imageUrl")}
-              value={form.imageUrl}
-              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.sku")}
-              value={form.sku}
-              onChange={(e) => setForm({ ...form, sku: e.target.value })}
-              style={inp}
-            />
-            <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexWrap: "wrap", minWidth: 0 }}>
-              <input
-                placeholder={t("products.barcode")}
-                value={form.barcode}
-                onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                style={{ ...inp, flex: "1 1 140px", minWidth: 0 }}
-              />
-              {!String(form.barcode || "").trim() ? (
-                <button
-                  type="button"
-                  className="btn-touch"
-                  onClick={() => generateBarcode("new")}
-                  style={{ background: "var(--surface2)", whiteSpace: "nowrap" }}
-                  title={t("products.generateBarcodeTitle")}
-                >
-                  {t("products.generateBarcode")}
-                </button>
-              ) : null}
-            </div>
-            <select
-              value={form.branchId || user?.branchId || ""}
-              onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-              required
-              style={inp}
-            >
-              <option value="">{t("products.branch")}</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {branchDisplayName(b, locale)}
-                </option>
-              ))}
-            </select>
-            <input
-              placeholder={t("products.initialStock")}
-              type="number"
-              value={form.initialStock}
-              onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
-              style={inp}
-            />
-            <input
-              placeholder={t("products.minLevel")}
-              type="number"
-              value={form.minStockLevel}
-              onChange={(e) => setForm({ ...form, minStockLevel: e.target.value })}
-              style={inp}
-            />
-          </div>
-          <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 200 }}>
-            {t("products.saveProduct")}
-          </button>
-        </form>
-      ) : null}
-
       <div className="card" style={{ overflowX: "auto" }}>
-        {isManager && selectedIds.length > 0 ? (
+        {canEditProducts && selectedIds.length > 0 ? (
           <div
             style={{
               display: "flex",
@@ -700,11 +574,11 @@ export default function Products() {
             </button>
           </div>
         ) : null}
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+        <table className="products-table">
           <thead>
-            <tr style={{ textAlign: "start", color: "var(--muted)" }}>
-              {isManager ? (
-                <th style={{ ...th, width: 44 }}>
+            <tr>
+              {canEditProducts ? (
+                <th className="products-table__check">
                   <input
                     type="checkbox"
                     checked={allSelectedOnPage}
@@ -715,28 +589,26 @@ export default function Products() {
                   />
                 </th>
               ) : null}
-              <th style={{ ...th, width: 72 }}>{t("products.colImage")}</th>
-              <th style={th}>{t("products.name")}</th>
-              <th style={th}>{t("products.colType")}</th>
-              <th style={th}>{t("products.colBrand")}</th>
-              <th style={th}>{t("products.category")}</th>
-              <th style={th}>{t("products.colPurchase")}</th>
-              <th style={th}>{t("products.colRetail")}</th>
-              <th style={th}>{t("products.colWholesale")}</th>
-              <th style={th}>{t("products.colExpiry")}</th>
-              <th style={th}>{t("products.colStock")}</th>
-              <th style={th}>{t("products.colStatus")}</th>
-              <th style={th}>Lots</th>
-              {isManager ? <th style={th} /> : null}
+              <th className="products-table__img">{t("products.colImage")}</th>
+              <th className="products-table__name">{t("products.name")}</th>
+              <th>{t("products.sku")}</th>
+              <th>{t("products.category")}</th>
+              <th className="products-table__num">{t("products.colPurchase")}</th>
+              <th className="products-table__num">{t("products.colRetail")}</th>
+              <th className="products-table__num">{t("products.colWholesale")}</th>
+              <th>{t("products.colExpiry")}</th>
+              <th className="products-table__num">{t("products.colStock")}</th>
+              <th>{t("products.colStatus")}</th>
+              {canEditProducts ? <th className="products-table__actions">{t("products.colActions")}</th> : null}
             </tr>
           </thead>
           <tbody>
             {list.map((p) => {
               const inv = p.inventories?.[0];
               return (
-                <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  {isManager ? (
-                    <td style={{ ...td, verticalAlign: "middle" }}>
+                <tr key={p.id}>
+                  {canEditProducts ? (
+                    <td className="products-table__check">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(p.id)}
@@ -746,71 +618,50 @@ export default function Products() {
                       />
                     </td>
                   ) : null}
-                  <td style={{ ...td, verticalAlign: "middle" }}>
-                    <ProductImagePreview url={p.imageUrl} alt="" width={56} height={56} />
+                  <td className="products-table__img">
+                    <ProductImagePreview url={p.imageUrl} alt="" width={48} height={48} />
                   </td>
-                  <td style={td}>{productDisplayName(p, locale)}</td>
-                  <td style={td}>{t(PET_KEYS[p.petType] || "pet.other")}</td>
-                  <td style={td}>{p.brand?.name || "—"}</td>
-                  <td style={td}>{p.productCategory?.name || p.category || "—"}</td>
-                  <td style={td}>{p.cost != null ? Number(p.cost).toFixed(2) : "—"}</td>
-                  <td style={td}>{Number(p.price).toFixed(2)}</td>
-                  <td style={td}>{p.wholesalePrice != null ? Number(p.wholesalePrice).toFixed(2) : "—"}</td>
-                  <td style={{ ...td, fontSize: 13 }}>
-                    {fmtExpiry(p.expiryDate)}
-                    {p.expiryDate && p.expiryAlertDaysBefore != null ? (
-                      <span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}>
-                        ±{p.expiryAlertDaysBefore} {t("products.expiryDaysShort")}
-                      </span>
+                  <td className="products-table__name">{productDisplayName(p, locale)}</td>
+                  <td>{p.sku || "—"}</td>
+                  <td>
+                    <div>{catalogLabel(p.productCategory) || p.category || "—"}</div>
+                    {p.productSubcategory ? (
+                      <div className="products-table__sub">{catalogLabel(p.productSubcategory)}</div>
                     ) : null}
                   </td>
-                  <td style={td}>{inv?.quantity ?? t("common.none")}</td>
-                  <td style={td}>
-                    {p.isActive ? t("products.statusActive") : t("products.statusInactive")}
+                  <td className="products-table__num">{p.cost != null ? Number(p.cost).toFixed(2) : "—"}</td>
+                  <td className="products-table__num">{Number(p.price).toFixed(2)}</td>
+                  <td className="products-table__num">
+                    {p.wholesalePrice != null ? Number(p.wholesalePrice).toFixed(2) : "—"}
                   </td>
-                  <td style={td}>
-                    <button
-                      type="button"
-                      className="btn-touch"
-                      style={{ background: "var(--surface2)" }}
-                      onClick={() => openLots(p.id, productDisplayName(p, locale))}
-                    >
-                      View lots
-                    </button>
-                  </td>
-                  {isManager ? (
-                    <td style={td}>
-                      <button
-                        type="button"
-                        className="btn-touch"
-                        style={{ background: "var(--surface2)", marginInlineEnd: 6 }}
-                        onClick={() =>
-                          setEditing({
-                            ...p,
-                            price: String(p.price),
-                            wholesalePrice: p.wholesalePrice != null ? String(p.wholesalePrice) : "",
-                            cost: p.cost != null ? String(p.cost) : "",
-                            nameEn: p.nameEn || "",
-                            category: p.category || "",
-                            expiryDate: p.expiryDate ? String(p.expiryDate).slice(0, 10) : "",
-                            expiryAlertDaysBefore:
-                              p.expiryAlertDaysBefore != null ? String(p.expiryAlertDaysBefore) : "",
-                          })
-                        }
-                      >
-                        {t("common.edit")}
-                      </button>
-                      <button type="button" className="btn-touch" style={{ background: "var(--danger)" }} onClick={() => remove(p.id)}>
-                        {t("common.delete")}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-touch"
-                        style={{ background: p.isActive ? "var(--warning)" : "var(--success)", marginInlineStart: 6 }}
-                        onClick={() => toggleActive(p)}
-                      >
-                        {p.isActive ? t("products.disable") : t("products.enable")}
-                      </button>
+                  <td>{fmtExpiry(p.expiryDate)}</td>
+                  <td className="products-table__num">{inv?.quantity ?? t("common.none")}</td>
+                  <td>{p.isActive ? t("products.statusActive") : t("products.statusInactive")}</td>
+                  {canEditProducts ? (
+                    <td className="products-table__actions">
+                      <div className="products-table__btns">
+                        <button type="button" style={btnSm} onClick={() => openEditModal(p)}>
+                          {t("common.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          style={{ ...btnSm, background: "var(--danger)", color: "#fff" }}
+                          onClick={() => remove(p.id)}
+                        >
+                          {t("common.delete")}
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...btnSm,
+                            background: p.isActive ? "var(--warning)" : "var(--success)",
+                            color: p.isActive ? "#111" : "#fff",
+                          }}
+                          onClick={() => toggleActive(p)}
+                        >
+                          {p.isActive ? t("products.disable") : t("products.enable")}
+                        </button>
+                      </div>
                     </td>
                   ) : null}
                 </tr>
@@ -856,171 +707,262 @@ export default function Products() {
         </div>
       </div>
 
-      {editing ? (
-        <div className="card" style={{ position: "fixed", inset: 0, margin: "auto", maxWidth: 480, maxHeight: "90vh", overflow: "auto", zIndex: 50 }}>
-          <h3>{t("products.editTitle")}</h3>
-          <label style={lbl}>
-            {t("products.name")}
-            <input style={inp} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-          </label>
-          <label style={lbl}>
-            {t("products.nameEnField")}
-            <input
-              style={inp}
-              value={editing.nameEn || ""}
-              onChange={(e) => setEditing({ ...editing, nameEn: e.target.value })}
-            />
-          </label>
-          <label style={lbl}>
-            {t("products.purchasePrice")}
-            <input style={inp} value={editing.cost} onChange={(e) => setEditing({ ...editing, cost: e.target.value })} />
-          </label>
-          <label style={lbl}>
-            {t("products.retailPrice")}
-            <input style={inp} value={editing.price} onChange={(e) => setEditing({ ...editing, price: e.target.value })} />
-          </label>
-          <label style={lbl}>
-            {t("products.wholesalePrice")}
-            <input
-              style={inp}
-              value={editing.wholesalePrice ?? ""}
-              onChange={(e) => setEditing({ ...editing, wholesalePrice: e.target.value })}
-            />
-          </label>
-          <label style={lbl}>
-            {t("products.expiryDate")}
-            <input
-              type="date"
-              style={inp}
-              value={editing.expiryDate || ""}
-              onChange={(e) => setEditing({ ...editing, expiryDate: e.target.value })}
-            />
-          </label>
-          <label style={lbl}>
-            {t("products.expiryAlertDays")}
-            <input
-              type="number"
-              min={0}
-              step={1}
-              style={inp}
-              value={editing.expiryAlertDaysBefore ?? ""}
-              onChange={(e) => setEditing({ ...editing, expiryAlertDaysBefore: e.target.value })}
-              disabled={!editing.expiryDate}
-            />
-          </label>
-          <label style={lbl}>
-            {t("products.colType")}
-            <select style={inp} value={editing.petType} onChange={(e) => setEditing({ ...editing, petType: e.target.value })}>
-              <option value="CAT">{t("pet.cat")}</option>
-              <option value="DOG">{t("pet.dog")}</option>
-              <option value="OTHER">{t("pet.other")}</option>
-            </select>
-          </label>
-          <label style={lbl}>
-            {t("products.category")}
-            <input
-              style={inp}
-              value={editing.category || ""}
-              onChange={(e) => setEditing({ ...editing, category: e.target.value })}
-            />
-          </label>
-          <label style={lbl}>
-            {t("products.sku")}
-            <input style={inp} value={editing.sku || ""} onChange={(e) => setEditing({ ...editing, sku: e.target.value })} />
-          </label>
-          <label style={lbl}>
-            {t("products.barcode")}
-            <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexWrap: "wrap" }}>
-              <input
-                style={{ ...inp, flex: "1 1 200px", minWidth: 0 }}
-                value={editing.barcode || ""}
-                onChange={(e) => setEditing({ ...editing, barcode: e.target.value })}
-              />
-              {!String(editing.barcode || "").trim() ? (
-                <button
-                  type="button"
-                  className="btn-touch"
-                  onClick={() => generateBarcode("edit")}
-                  style={{ background: "var(--surface2)", whiteSpace: "nowrap" }}
-                  title={t("products.generateBarcodeTitle")}
+
+      {formMode ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 60,
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            background: "rgba(15, 23, 42, 0.55)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !formBusy) closeFormModal();
+          }}
+        >
+          <form
+            className="card"
+            onSubmit={submitProductForm}
+            noValidate
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "90vh",
+              overflow: "auto",
+              margin: 0,
+              display: "grid",
+              gap: 14,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <h3 style={{ margin: 0 }}>{formMode === "edit" ? t("products.editTitle") : t("products.addProduct")}</h3>
+              <button
+                type="button"
+                onClick={closeFormModal}
+                disabled={formBusy}
+                style={{ ...btnSm, background: "var(--surface2)" }}
+              >
+                {t("common.close")}
+              </button>
+            </div>
+
+            {formError ? <div style={{ color: "var(--danger)", fontSize: 14 }}>{formError}</div> : null}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "12px 14px",
+                alignItems: "start",
+              }}
+              className="product-form-grid"
+            >
+              <label style={fld}>
+                <span>{t("products.nameEnField")} *</span>
+                <input
+                  style={inp}
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  value={form.nameEn}
+                  onChange={(e) => setForm({ ...form, nameEn: e.target.value })}
+                />
+              </label>
+              <label style={fld}>
+                <span>{t("products.nameLocalOptional")}</span>
+                <input
+                  style={inp}
+                  maxLength={120}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </label>
+              <label style={fld}>
+                <span>{t("products.purchasePrice")}</span>
+                <input
+                  style={inp}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                />
+              </label>
+              <label style={fld}>
+                <span>{t("products.retailPrice")} *</span>
+                <input
+                  style={inp}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  required
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                />
+              </label>
+              <label style={fld}>
+                <span>{t("products.wholesalePrice")}</span>
+                <input
+                  style={inp}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.wholesalePrice}
+                  onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })}
+                />
+              </label>
+              <label style={fld}>
+                <span>{t("products.expiryDate")}</span>
+                <input
+                  style={inp}
+                  type="date"
+                  value={form.expiryDate}
+                  onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+                />
+              </label>
+              <label style={fld}>
+                <span>{t("products.category")} *</span>
+                <select
+                  style={inp}
+                  required
+                  value={form.categoryId}
+                  onChange={(e) =>
+                    setForm({ ...form, categoryId: e.target.value, subcategoryId: "", sku: "" })
+                  }
                 >
-                  {t("products.generateBarcode")}
-                </button>
+                  <option value="">{t("products.pickCategory")}</option>
+                  {catalog.categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {catalogLabel(c)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fld}>
+                <span>{t("products.subcategory")}</span>
+                <select
+                  style={inp}
+                  value={form.subcategoryId}
+                  disabled={!form.categoryId}
+                  onChange={(e) => setForm({ ...form, subcategoryId: e.target.value, sku: "" })}
+                >
+                  <option value="">{t("products.pickSubcategory")}</option>
+                  {modalSubs.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {catalogLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fld}>
+                <span>{t("products.sku")}</span>
+                <select
+                  style={inp}
+                  value={form.sku}
+                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                >
+                  <option value="">{t("products.pickSku")}</option>
+                  {form.sku && !modalSkus.some((s) => s.code === form.sku) ? (
+                    <option value={form.sku}>{form.sku}</option>
+                  ) : null}
+                  {modalSkus.map((s) => (
+                    <option key={s.id} value={s.code}>
+                      {s.code}
+                      {s.name ? ` — ${s.name}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fld}>
+                <span>{t("products.barcode")}</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                  <input
+                    style={{ ...inp, flex: 1, minWidth: 0 }}
+                    value={form.barcode}
+                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                  />
+                  {!String(form.barcode || "").trim() ? (
+                    <button
+                      type="button"
+                      onClick={generateBarcode}
+                      style={{ ...btnSm, background: "var(--surface2)", alignSelf: "stretch", minHeight: 42 }}
+                      title={t("products.generateBarcodeTitle")}
+                    >
+                      {t("products.generateBarcode")}
+                    </button>
+                  ) : null}
+                </div>
+              </label>
+              {formMode === "create" ? (
+                <>
+                  <label style={fld}>
+                    <span>{t("products.initialStock")}</span>
+                    <input
+                      style={inp}
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={form.initialStock}
+                      onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
+                    />
+                  </label>
+                  <label style={fld}>
+                    <span>{t("products.minLevel")}</span>
+                    <input
+                      style={inp}
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={form.minStockLevel}
+                      onChange={(e) => setForm({ ...form, minStockLevel: e.target.value })}
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label style={{ ...fld, gridColumn: "1 / -1" }}>
+                <span>{t("products.imageUrl")} *</span>
+                <input
+                  style={inp}
+                  required
+                  value={form.imageUrl}
+                  onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                />
+              </label>
+              {String(form.imageUrl || "").trim() ? (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 8 }}>
+                    {t("products.imagePreview")}
+                  </span>
+                  <ProductImagePreview url={form.imageUrl} alt="" width={140} height={140} />
+                </div>
               ) : null}
             </div>
-          </label>
-          <label style={lbl}>
-            {t("products.image")}
-            <input style={inp} value={editing.imageUrl || ""} onChange={(e) => setEditing({ ...editing, imageUrl: e.target.value })} />
-          </label>
-          <div style={{ marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 6 }}>{t("products.previewFromDb")}</span>
-            <ProductImagePreview url={editing.imageUrl} alt="" width={120} height={120} />
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="button" className="btn-touch" style={{ background: "var(--accent)", color: "#fff" }} onClick={patch}>
-              {t("common.save")}
-            </button>
-            <button type="button" className="btn-touch" style={{ background: "var(--surface2)" }} onClick={() => setEditing(null)}>
-              {t("common.cancel")}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
-      {lotsView.productId ? (
-        <div className="card" style={{ position: "fixed", inset: 0, margin: "auto", maxWidth: 860, maxHeight: "90vh", overflow: "auto", zIndex: 60 }}>
-          <h3 style={{ marginTop: 0 }}>Lots — {lotsView.productName}</h3>
-          <div style={{ color: "var(--muted)", marginBottom: 10, fontSize: 13 }}>
-            Branch: {branches.find((b) => b.id === lotsView.branchId)?.name || lotsView.branchId}
-          </div>
-          {lotsView.loading ? (
-            <div>Loading...</div>
-          ) : lotsView.error ? (
-            <div style={{ color: "var(--danger)" }}>{lotsView.error}</div>
-          ) : !lotsView.lots.length ? (
-            <div style={{ color: "var(--muted)" }}>No lots found for this product in selected branch.</div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ textAlign: "start", color: "var(--muted)" }}>
-                    <th style={th}>Received</th>
-                    <th style={th}>Expiry</th>
-                    <th style={th}>Status</th>
-                    <th style={th}>Received Qty</th>
-                    <th style={th}>On hand</th>
-                    <th style={th}>Unit cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lotsView.lots.map((lot) => {
-                    const st = lotStatus(lot.expiryDate);
-                    return (
-                      <tr key={lot.id} style={{ borderTop: "1px solid var(--border)" }}>
-                        <td style={td}>{fmtExpiry(lot.receivedAt)}</td>
-                        <td style={td}>{fmtExpiry(lot.expiryDate)}</td>
-                        <td style={{ ...td, color: st.color, fontWeight: 700 }}>{st.label}</td>
-                        <td style={td}>{lot.quantityReceived}</td>
-                        <td style={td}>{lot.quantityOnHand}</td>
-                        <td style={td}>{lot.unitCost != null ? Number(lot.unitCost).toFixed(2) : "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn-touch"
+                disabled={formBusy}
+                style={{ background: "var(--surface2)" }}
+                onClick={closeFormModal}
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="submit"
+                className="btn-touch"
+                disabled={formBusy}
+                style={{ background: "var(--accent)", color: "#fff" }}
+              >
+                {formMode === "edit" ? t("common.save") : t("products.saveProduct")}
+              </button>
             </div>
-          )}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-            <button
-              type="button"
-              className="btn-touch"
-              style={{ background: "var(--surface2)" }}
-              onClick={() => setLotsView({ productId: "", productName: "", branchId: "", lots: [], loading: false, error: "" })}
-            >
-              {t("common.close")}
-            </button>
-          </div>
+          </form>
         </div>
       ) : null}
     </div>
@@ -1034,6 +976,17 @@ const inp = {
   background: "var(--bg)",
   color: "var(--text)",
 };
-const th = { padding: 10 };
-const td = { padding: 10 };
-const lbl = { display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 };
+const fld = { display: "flex", flexDirection: "column", gap: 6, minWidth: 0 };
+const btnSm = {
+  padding: "4px 10px",
+  minHeight: 28,
+  fontSize: 12,
+  fontWeight: 600,
+  lineHeight: 1.2,
+  borderRadius: 999,
+  border: "none",
+  cursor: "pointer",
+  background: "var(--surface2)",
+  color: "var(--text)",
+  whiteSpace: "nowrap",
+};

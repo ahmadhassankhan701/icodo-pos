@@ -1,4 +1,6 @@
 import jwt from "jsonwebtoken";
+import { prisma } from "../lib/prisma.js";
+import { hasPermission, resolveRolePermissions } from "../lib/permissions.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -31,5 +33,38 @@ export function requireRole(...roles) {
       return res.status(403).json({ error: "صلاحية غير كافية" });
     }
     next();
+  };
+}
+
+/**
+ * Fine-grained permission check. ADMIN always passes.
+ * Loads org permission matrices on demand (cached on req).
+ */
+export function requirePermission(...keys) {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: "غير مصرح" });
+      if (req.user.role === "ADMIN") return next();
+
+      if (!req._rolePermissions) {
+        const org = await prisma.organization.findUnique({
+          where: { id: req.user.organizationId },
+          select: {
+            managerPermissions: true,
+            cashierPermissions: true,
+          },
+        });
+        req._rolePermissions = resolveRolePermissions(org, req.user.role);
+      }
+
+      for (const key of keys) {
+        if (!hasPermission(req._rolePermissions, key)) {
+          return res.status(403).json({ error: "صلاحية غير كافية لهذا الإجراء" });
+        }
+      }
+      next();
+    } catch (e) {
+      next(e);
+    }
   };
 }

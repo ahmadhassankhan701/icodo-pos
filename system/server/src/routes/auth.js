@@ -8,9 +8,8 @@ import {
 import { databaseUrlFingerprint } from "../lib/databaseUrlFingerprint.js";
 import { signToken, authMiddleware } from "../middleware/auth.js";
 import { SLUG_RE, bootstrapOrganization } from "../lib/organizationBootstrap.js";
-import { isPlatformAdminEmail } from "../lib/platformAdmin.js";
 import { normalizeBusinessVertical } from "../lib/businessVertical.js";
-import { getLoyaltyFlagsForOrganization } from "../lib/loyalty.js";
+import { buildSessionUser } from "../lib/sessionUser.js";
 
 const router = Router();
 
@@ -98,28 +97,16 @@ router.post("/register-organization", async (req, res, next) => {
       organizationId: result.user.organizationId,
     });
 
-    const loyaltyFlags = await getLoyaltyFlagsForOrganization(prisma, result.org.id);
+    const sessionUser = await buildSessionUser(
+      prisma,
+      result.user,
+      result.org,
+      result.branch
+    );
 
     res.status(201).json({
       token,
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-        nameEn: result.user.nameEn ?? null,
-        role: result.user.role,
-        branchId: result.user.branchId,
-        branchName: result.branch.name,
-        branchNameEn: result.branch.nameEn ?? null,
-        organizationId: result.org.id,
-        organizationName: result.org.name,
-        organizationSlug: result.org.slug,
-        businessVertical: result.org.businessVertical ?? null,
-        ...loyaltyFlags,
-        isPlatformAdmin:
-          result.user.role === "ADMIN" &&
-          isPlatformAdminEmail(result.user.email),
-      },
+      user: sessionUser,
     });
   } catch (e) {
     if (e?.code === "P2002") {
@@ -160,24 +147,18 @@ router.post("/login", async (req, res, next) => {
       const matches = await prisma.user.findMany({
         where: { email: emailNorm },
         include: { branch: true, organization: true },
+        take: 5,
       });
-      if (matches.length === 0) user = null;
-      else if (matches.length === 1) user = matches[0];
-      else {
+      if (matches.length > 1) {
         return res.status(400).json({
-          error:
-            "نفس البريد مسجل في أكثر من مؤسسة — أرسل organizationSlug (الرمز) مع الطلب",
+          error: "هذا البريد مسجّل في أكثر من مؤسسة — أدخل رمز المؤسسة (slug)",
         });
       }
+      user = matches[0] || null;
     }
-    let passwordOk = false;
-    if (user) {
-      try {
-        passwordOk = await bcrypt.compare(password, user.passwordHash);
-      } catch {
-        passwordOk = false;
-      }
-    }
+
+    const passwordOk =
+      user && (await bcrypt.compare(String(password), user.passwordHash));
     if (!user || !passwordOk) {
       return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
     }
@@ -187,26 +168,10 @@ router.post("/login", async (req, res, next) => {
       branchId: user.branchId,
       organizationId: user.organizationId,
     });
-    const loyaltyFlags = await getLoyaltyFlagsForOrganization(prisma, user.organizationId);
+    const sessionUser = await buildSessionUser(prisma, user, user.organization, user.branch);
     res.json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        nameEn: user.nameEn ?? null,
-        role: user.role,
-        branchId: user.branchId,
-        branchName: user.branch?.name ?? null,
-        branchNameEn: user.branch?.nameEn ?? null,
-        organizationId: user.organizationId,
-        organizationName: user.organization?.name ?? null,
-        organizationSlug: user.organization?.slug ?? null,
-        businessVertical: user.organization?.businessVertical ?? null,
-        ...loyaltyFlags,
-        isPlatformAdmin:
-          user.role === "ADMIN" && isPlatformAdminEmail(user.email),
-      },
+      user: sessionUser,
     });
   } catch (e) {
     if (isDbUnavailableError(e)) {
@@ -224,24 +189,7 @@ router.get("/me", authMiddleware, async (req, res, next) => {
       include: { branch: true, organization: true },
     });
     if (!user) return res.status(404).json({ error: "المستخدم غير موجود" });
-    const loyaltyFlags = await getLoyaltyFlagsForOrganization(prisma, user.organizationId);
-    res.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      nameEn: user.nameEn ?? null,
-      role: user.role,
-      branchId: user.branchId,
-      branchName: user.branch?.name ?? null,
-      branchNameEn: user.branch?.nameEn ?? null,
-      organizationId: user.organizationId,
-      organizationName: user.organization?.name ?? null,
-      organizationSlug: user.organization?.slug ?? null,
-      businessVertical: user.organization?.businessVertical ?? null,
-      ...loyaltyFlags,
-      isPlatformAdmin:
-        user.role === "ADMIN" && isPlatformAdminEmail(user.email),
-    });
+    res.json(await buildSessionUser(prisma, user, user.organization, user.branch));
   } catch (e) {
     next(e);
   }

@@ -14,7 +14,9 @@ import POS from "./pages/POS.jsx";
 import Wholesale from "./pages/Wholesale.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
+import Categories from "./pages/Categories.jsx";
 import Users from "./pages/Users.jsx";
+import Permissions from "./pages/Permissions.jsx";
 import Sync from "./pages/Sync.jsx";
 import Branches from "./pages/Branches.jsx";
 import Customers from "./pages/Customers.jsx";
@@ -61,8 +63,8 @@ const PlatformLayout = React.lazy(loadPlatformLayout);
 const PlatformOrganizations = React.lazy(loadPlatformOrganizations);
 const PlatformUsers = React.lazy(loadPlatformUsers);
 
-function Protected({ children, roles }) {
-  const { user, loading } = useAuth();
+function Protected({ children, roles, permission }) {
+  const { user, loading, can } = useAuth();
   const { t } = useI18n();
   if (loading) {
     return (
@@ -72,8 +74,13 @@ function Protected({ children, roles }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+  if (user.role !== "ADMIN") {
+    if (roles && !roles.includes(user.role)) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    if (permission && !can(permission)) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
   return children;
 }
@@ -172,13 +179,15 @@ export default function App() {
             </Protected>
           }
         >
-          <Route path="/pos" element={<POS />} />
+          <Route path="/pos" element={<Protected permission="pos"><POS /></Protected>} />
           <Route
             path="/wholesale"
             element={
-              <VerticalFeatureGate feature="wholesale">
-                <Wholesale />
-              </VerticalFeatureGate>
+              <Protected permission="wholesale">
+                <VerticalFeatureGate feature="wholesale">
+                  <Wholesale />
+                </VerticalFeatureGate>
+              </Protected>
             }
           />
           <Route path="/sync-queue" element={<SyncQueueStatus />} />
@@ -189,7 +198,7 @@ export default function App() {
           <Route
             path="/loyalty"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="loyalty">
                 <LoyaltyCoupons />
               </Protected>
             }
@@ -205,7 +214,7 @@ export default function App() {
           <Route
             path="/reports"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="reports">
                 <Reports />
               </Protected>
             }
@@ -268,7 +277,22 @@ export default function App() {
             <Route path="payroll/:periodId" element={<HrPayrollPeriod />} />
             <Route path="loans" element={<HrLoans />} />
           </Route>
-          <Route path="/products" element={<Products />} />
+          <Route
+            path="/products"
+            element={
+              <Protected permission="productsView">
+                <Products />
+              </Protected>
+            }
+          />
+          <Route
+            path="/categories"
+            element={
+              <Protected permission="catalogEdit">
+                <Categories />
+              </Protected>
+            }
+          />
           <Route path="/customers" element={<Customers />} />
           <Route
             path="/customer-accounts"
@@ -295,6 +319,14 @@ export default function App() {
             }
           />
           <Route
+            path="/permissions"
+            element={
+              <Protected roles={["ADMIN"]}>
+                <Permissions />
+              </Protected>
+            }
+          />
+          <Route
             path="/branches"
             element={
               <Protected roles={["ADMIN"]}>
@@ -313,7 +345,7 @@ export default function App() {
           <Route
             path="/returns"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="refunds">
                 <Returns />
               </Protected>
             }
@@ -321,7 +353,7 @@ export default function App() {
           <Route
             path="/purchases"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="purchases">
                 <Purchases />
               </Protected>
             }
@@ -329,7 +361,7 @@ export default function App() {
           <Route
             path="/transfer"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="transfer">
                 <Transfer />
               </Protected>
             }
@@ -337,16 +369,23 @@ export default function App() {
           <Route
             path="/count"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="stockCount">
                 <Count />
               </Protected>
             }
           />
-          <Route path="/cash" element={<Cash />} />
+          <Route
+            path="/cash"
+            element={
+              <Protected permission="cashSession">
+                <Cash />
+              </Protected>
+            }
+          />
           <Route
             path="/audit"
             element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="audit">
                 <Audit />
               </Protected>
             }

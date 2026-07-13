@@ -19,7 +19,7 @@ const FALLBACK_EN_BY_AR = {
 };
 
 /**
- * اسم العرض حسب لغة الواجهة — name (عربي) و nameEn الاختياري
+ * اسم العرض حسب لغة الواجهة — nameEn إلزامي عملياً؛ name (محلي) اختياري
  */
 export function productDisplayName(product, locale) {
   if (!product) return "";
@@ -34,5 +34,8 @@ export function productDisplayName(product, locale) {
     return nameAr;
   }
 
-  return nameAr;
+  if (nameAr && (!nameEnDb || normalizeKey(nameAr) !== normalizeKey(nameEnDb))) {
+    return nameAr;
+  }
+  return nameEnDb || nameAr;
 }

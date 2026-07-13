@@ -37,6 +37,14 @@ model Organization {
   slug      String?  @unique
   /// نشاط المنشأة (بقالة، مطعم، …)
   businessVertical BusinessVertical?
+  /// FREE | PREMIUM — يتحكم بحد الفروع والميزات لاحقاً
+  plan             String   @default("FREE")
+  /// أقصى عدد فروع حسب الخطة (الافتراضي 3 للخطة المجانية)
+  maxBranches      Int      @default(3)
+  /// صلاحيات دور المدير (JSON object of permissionKey → boolean)
+  managerPermissions String?
+  /// صلاحيات دور الموظف/الكاشير (JSON)
+  cashierPermissions String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -45,6 +53,8 @@ model Organization {
   products                 Product[]
   brands                   Brand[]
   categories               Category[]
+  subcategories            Subcategory[]
+  catalogSkus              CatalogSku[]
   customers                Customer[]
   suppliers                Supplier[]
   syncSettings             SyncSettings?
@@ -481,17 +491,54 @@ model Brand {
 }
 
 model Category {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supabaseId     String?
+  name           String
+  nameEn         String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  products       Product[]     @relation("ProductCategory")
+  subcategories  Subcategory[]
+
+  @@unique([organizationId, supabaseId])
+  @@index([organizationId])
+}
+
+model Subcategory {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  supabaseId     String?
+  categoryId     String
+  category       Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   name           String
   nameEn         String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  products       Product[]    @relation("ProductCategory")
+  products       Product[]    @relation("ProductSubcategory")
+  catalogSkus    CatalogSku[]
 
-  @@unique([organizationId, supabaseId])
+  @@index([organizationId])
+  @@index([categoryId])
+  @@unique([categoryId, name])
+}
+
+/// قائمة رموز SKU القابلة للاختيار عند إنشاء/تعديل المنتج
+model CatalogSku {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  code           String
+  name           String?
+  subcategoryId  String?
+  subcategory    Subcategory?  @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([subcategoryId])
 }
 
 model Branch {
@@ -817,6 +864,8 @@ model Product {
   brand          Brand?       @relation(fields: [brandId], references: [id], onDelete: SetNull)
   categoryId     String?
   productCategory Category?   @relation("ProductCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  subcategoryId  String?
+  productSubcategory Subcategory? @relation("ProductSubcategory", fields: [subcategoryId], references: [id], onDelete: SetNull)
   imageUrl       String?
   isActive       Boolean      @default(true)
   externalId     String?

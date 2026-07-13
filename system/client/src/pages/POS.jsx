@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client.js";
-import { ProductCard } from "../components/ProductCard.jsx";
-import { Cart } from "../components/Cart.jsx";
+import { PosCartPanel } from "../components/PosCartPanel.jsx";
 import { InvoicePrint } from "../components/InvoicePrint.jsx";
 import {
   PAYMENT_METHOD_IDS,
@@ -13,6 +12,7 @@ import {
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner.js";
 import { useCartStore } from "../store/cartStore.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useActiveBranchId, useActiveBranchLabel } from "../context/BranchContext.jsx";
 import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
@@ -27,10 +27,10 @@ import {
 import { getOrCreateDeviceId, SYNC_TYPES } from "../offline/db.js";
 import { enqueue } from "../offline/syncQueue.js";
 import { buildOfflineSalePreview } from "../offline/offlineSale.js";
-import { branchDisplayName } from "../utils/displayLabels.js";
 import { buildReceiptPlainText } from "../utils/receiptText.js";
 import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
-import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
+import { productDisplayName } from "../utils/productName.js";
+import { ProductImagePreview } from "../components/ProductImagePreview.jsx";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -41,11 +41,14 @@ export default function POS() {
   const { user } = useAuth();
   const { refreshPending } = useOffline();
   const { t, locale } = useI18n();
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
+  const branchId = useActiveBranchId();
+  const branchName = useActiveBranchLabel(locale);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
-  const [petFilter, setPetFilter] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchHighlight, setSearchHighlight] = useState(0);
+  const [categoryId, setCategoryId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState([
@@ -63,20 +66,27 @@ export default function POS() {
   const [holdLabel, setHoldLabel] = useState("");
   const [heldList, setHeldList] = useState([]);
   const [copyDone, setCopyDone] = useState(false);
-  const [cartExpanded, setCartExpanded] = useState(false);
   const [couponInput, setCouponInput] = useState("");
   const [loyaltyPointsInput, setLoyaltyPointsInput] = useState("");
   const [guestPhoneInput, setGuestPhoneInput] = useState("");
   /** مبلغ يُدفع الآن عند البيع الجزئي بالآجل (يُترك فارغاً للدفع الكامل) */
   const [payNowInput, setPayNowInput] = useState("");
+  const searchWrapRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const items = useCartStore((s) => s.items);
   const useWholesalePricing = useCartStore((s) => s.useWholesalePricing);
   const setUseWholesalePricing = useCartStore((s) => s.setUseWholesalePricing);
   const syncLinePricesFromProducts = useCartStore((s) => s.syncLinePricesFromProducts);
 
-  const showPetTypeFilter = isVerticalFeatureEnabled("petPosFilters", user?.businessVertical);
-  const showWholesaleToggle = isVerticalFeatureEnabled("wholesale", user?.businessVertical);
+  const hasWholesaleCatalog = useMemo(
+    () =>
+      products.some(
+        (p) => p.wholesalePrice != null && p.wholesalePrice !== "" && !Number.isNaN(Number(p.wholesalePrice))
+      ),
+    [products]
+  );
+  const showWholesaleToggle = hasWholesaleCatalog;
   const addProduct = useCartStore((s) => s.addProduct);
   const setQty = useCartStore((s) => s.setQuantity);
   const removeLine = useCartStore((s) => s.removeLine);
@@ -111,28 +121,24 @@ export default function POS() {
   }, []);
 
   useEffect(() => {
-    api("/api/branches")
-      .then((bs) => {
-        setBranches(bs);
-        if (user?.role === "ADMIN" && !branchId && bs[0]) {
-          setBranchId(bs[0].id);
-        }
-      })
-      .catch(() => {});
-  }, [user?.role]);
+    if (branchId) setBranchCart(branchId);
+  }, [branchId, setBranchCart]);
 
   useEffect(() => {
-    const bid = branchId || user?.branchId;
-    if (bid) setBranchCart(bid);
-  }, [branchId, user?.branchId, setBranchCart]);
-
-  useEffect(() => {
-    if (!showPetTypeFilter) setPetFilter("");
-  }, [showPetTypeFilter]);
+    api("/api/catalog")
+      .then((data) => setCategories(Array.isArray(data?.categories) ? data.categories : []))
+      .catch(() => setCategories([]));
+  }, []);
 
   useEffect(() => {
     if (!showWholesaleToggle) setUseWholesalePricing(false);
   }, [showWholesaleToggle, setUseWholesalePricing]);
+
+  const catalogLabel = (row) => {
+    if (!row) return "";
+    if (locale === "en" && row.nameEn?.trim()) return row.nameEn.trim();
+    return row.name || row.nameEn || "";
+  };
 
   const [loyaltyFlags, setLoyaltyFlags] = useState({
     loyaltyProgramEnabled: Boolean(user?.loyaltyProgramEnabled),
@@ -166,43 +172,78 @@ export default function POS() {
   }, [loyaltyFlags.loyaltyRedemptionEnabled]);
 
   const loadProducts = useCallback(async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     const q = new URLSearchParams();
     if (bid) q.set("branchId", bid);
-    if (search) q.set("search", search);
-    if (petFilter) q.set("petType", petFilter);
     const offline = typeof navigator !== "undefined" && !navigator.onLine;
     if (offline) {
-      let list = await loadProductsForBranch(bid);
-      if (search) {
-        const s = search.toLowerCase();
-        list = list.filter(
-          (p) =>
-            (p.name && p.name.toLowerCase().includes(s)) ||
-            (p.nameEn && p.nameEn.toLowerCase().includes(s)) ||
-            (p.sku && String(p.sku).toLowerCase().includes(s)) ||
-            (p.barcode && String(p.barcode).toLowerCase().includes(s))
-        );
-      }
-      if (petFilter) list = list.filter((p) => p.petType === petFilter);
+      const list = await loadProductsForBranch(bid);
       setProducts(list);
       return;
     }
     try {
       const list = await api(`/api/products?${q.toString()}`);
-      setProducts(list);
+      const arr = Array.isArray(list) ? list : list?.items || [];
+      setProducts(arr);
       if (bid) {
-        await saveProductsForBranch(bid, list);
-        await hydrateInventoryFromProducts(bid, list);
+        await saveProductsForBranch(bid, arr);
+        await hydrateInventoryFromProducts(bid, arr);
       }
     } catch {
       const list = await loadProductsForBranch(bid);
       setProducts(list);
     }
-  }, [branchId, user?.branchId, search, petFilter]);
+  }, [branchId]);
+
+  const searchHits = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return products
+      .filter((p) => {
+        if (!p?.isActive && p?.isActive !== undefined) return false;
+        if (categoryId && p.categoryId !== categoryId) return false;
+        // Wholesale mode: only products that have a wholesale price
+        if (useWholesalePricing) {
+          if (p.wholesalePrice == null || p.wholesalePrice === "") return false;
+          if (Number.isNaN(Number(p.wholesalePrice))) return false;
+        }
+        return (
+          (p.name && p.name.toLowerCase().includes(q)) ||
+          (p.nameEn && p.nameEn.toLowerCase().includes(q)) ||
+          (p.sku && String(p.sku).toLowerCase().includes(q)) ||
+          (p.barcode && String(p.barcode).toLowerCase().includes(q))
+        );
+      })
+      .slice(0, 14);
+  }, [search, products, categoryId, useWholesalePricing]);
+
+  const pickSearchProduct = useCallback(
+    (p) => {
+      if (!p) return;
+      addProduct(p, 1);
+      setSearch("");
+      setSearchOpen(false);
+      setSearchHighlight(0);
+      setMsg("");
+      searchInputRef.current?.focus();
+    },
+    [addProduct]
+  );
+
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (!searchWrapRef.current?.contains(e.target)) setSearchOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    setSearchHighlight(0);
+  }, [search]);
 
   const loadHeldCarts = useCallback(async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) {
       setHeldList([]);
       return;
@@ -215,7 +256,7 @@ export default function POS() {
     } catch {
       setHeldList([]);
     }
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   useEffect(() => {
     loadProducts().catch(() => setProducts([]));
@@ -288,12 +329,6 @@ export default function POS() {
     }
   }, [customerId, paymentMethod]);
 
-  const branchName = useMemo(() => {
-    const bid = branchId || user?.branchId;
-    const b = branches.find((br) => br.id === bid);
-    return branchDisplayName(b, locale);
-  }, [branches, branchId, user?.branchId, locale]);
-
   const hasBelowCostWarning = useMemo(
     () => items.some((line) => isUnitPriceAtOrBelowCost(line.unitPrice, line.cost)),
     [items]
@@ -319,7 +354,7 @@ export default function POS() {
       setMsg(t("pos.holdNeedItems"));
       return;
     }
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     setLoading(true);
     try {
@@ -388,7 +423,7 @@ export default function POS() {
   const checkout = async () => {
     setMsg("");
     if (!items.length) return;
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
 
     let paymentSplits = undefined;
     if (splitEnabled) {
@@ -533,85 +568,119 @@ export default function POS() {
     <div className="pos-page-root">
       <div className="pos-top-bar">
         <h1 className="pos-top-bar__title">{t("pos.title")}</h1>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-          <select
-            value={branchId || user?.branchId || ""}
+        <div className="pos-search" ref={searchWrapRef}>
+          <input
+            ref={searchInputRef}
+            className="pos-search__input"
+            placeholder={t("pos.searchPlaceholder")}
+            value={search}
             onChange={(e) => {
-              setBranchId(e.target.value);
-              clearCart();
+              setSearch(e.target.value);
+              setSearchOpen(true);
             }}
-            disabled={user?.role !== "ADMIN" && Boolean(user?.branchId)}
-            style={{
-              minHeight: 44,
-              minWidth: 180,
-              padding: "8px 12px",
-              borderRadius: 12,
-              background: "var(--surface)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
+            onFocus={() => setSearchOpen(true)}
+            onKeyDown={(e) => {
+              if (!searchOpen && (e.key === "ArrowDown" || e.key === "Enter")) {
+                setSearchOpen(true);
+              }
+              if (e.key === "Escape") {
+                setSearchOpen(false);
+                return;
+              }
+              if (!searchHits.length) return;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSearchHighlight((i) => Math.min(i + 1, searchHits.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSearchHighlight((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                pickSearchProduct(searchHits[searchHighlight] || searchHits[0]);
+              }
             }}
+            autoComplete="off"
+            aria-autocomplete="list"
+            aria-expanded={searchOpen && search.trim().length > 0}
+          />
+          {searchOpen && search.trim() ? (
+            <div className="pos-search__menu" role="listbox">
+              {searchHits.length === 0 ? (
+                <div className="pos-search__empty">{t("pos.searchNoResults")}</div>
+              ) : (
+                searchHits.map((p, idx) => {
+                  const stock = p.inventories?.[0]?.quantity ?? 0;
+                  const price = useWholesalePricing && p.wholesalePrice != null
+                    ? Number(p.wholesalePrice)
+                    : Number(p.price);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === searchHighlight}
+                      className={`pos-search__option${idx === searchHighlight ? " is-active" : ""}`}
+                      onMouseEnter={() => setSearchHighlight(idx)}
+                      onClick={() => pickSearchProduct(p)}
+                    >
+                      <ProductImagePreview url={p.imageUrl} alt="" width={44} height={44} />
+                      <span className="pos-search__option-main">
+                        <span className="pos-search__option-name">
+                          {productDisplayName(p, locale)}
+                        </span>
+                        <span className="pos-search__option-meta">
+                          {p.sku ? `SKU ${p.sku}` : p.barcode || "—"}
+                          {" · "}
+                          {t("pos.inStock", { n: stock })}
+                        </span>
+                      </span>
+                      <span className="pos-search__option-price">
+                        {price.toFixed(2)} {t("common.currency")}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          ) : null}
+        </div>
+        {categories.length > 0 ? (
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="pos-top-bar__select"
+            aria-label={t("products.category")}
           >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {branchDisplayName(b, locale)}
+            <option value="">{t("pos.categoryAll")}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {catalogLabel(c)}
               </option>
             ))}
-          </select>
-        </label>
-        <input
-          placeholder={t("pos.searchPlaceholder")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: 200,
-            minHeight: 44,
-            padding: "0 12px",
-            borderRadius: 12,
-            border: "1px solid var(--border)",
-            background: "var(--bg)",
-            color: "var(--text)",
-          }}
-        />
-        {showPetTypeFilter ? (
-          <select
-            value={petFilter}
-            onChange={(e) => setPetFilter(e.target.value)}
-            style={{
-              minHeight: 44,
-              padding: "8px 12px",
-              borderRadius: 12,
-              background: "var(--surface)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <option value="">{t("pos.petAll")}</option>
-            <option value="CAT">{t("pet.cat")}</option>
-            <option value="DOG">{t("pet.dog")}</option>
-            <option value="OTHER">{t("pet.other")}</option>
           </select>
         ) : null}
         <button type="button" className="btn-touch" onClick={() => loadProducts()} style={{ background: "var(--surface2)" }}>
           {t("pos.refresh")}
         </button>
         {showWholesaleToggle ? (
-          <button
-            type="button"
-            className="btn-touch"
-            onClick={() => {
-              setUseWholesalePricing(!useWholesalePricing);
-            }}
-            style={{
-              background: useWholesalePricing ? "var(--accent2)" : "var(--surface2)",
-              color: useWholesalePricing ? "#fff" : "var(--text)",
-              border: useWholesalePricing ? "2px solid var(--accent2)" : "1px solid var(--border)",
-            }}
-            title={t("pos.wholesaleHint")}
-          >
-            {useWholesalePricing ? t("pos.wholesaleOn") : t("pos.wholesaleOff")}
-          </button>
+          <div className="pos-price-mode" role="group" aria-label={t("pos.wholesaleHint")} title={t("pos.wholesaleHint")}>
+            <button
+              type="button"
+              className={`pos-price-mode__btn${!useWholesalePricing ? " is-active" : ""}`}
+              aria-pressed={!useWholesalePricing}
+              onClick={() => setUseWholesalePricing(false)}
+            >
+              {t("pos.priceRetail")}
+            </button>
+            <button
+              type="button"
+              className={`pos-price-mode__btn${useWholesalePricing ? " is-active" : ""}`}
+              aria-pressed={useWholesalePricing}
+              onClick={() => setUseWholesalePricing(true)}
+            >
+              {t("pos.priceWholesale")}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -625,78 +694,24 @@ export default function POS() {
       >
         <style>{`
           @media (min-width: 960px) {
-            .pos-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, 380px) !important; align-items: stretch !important; }
+            .pos-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, 400px) !important; align-items: stretch !important; }
           }
         `}</style>
-        <div className="pos-products-frame">
-          <div className="grid-products grid-products--pos">
-            {products.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                compact
-                useWholesalePricing={useWholesalePricing}
-                onAdd={(x) => addProduct(x, 1)}
-              />
-            ))}
-          </div>
+        <div className="pos-products-frame pos-products-frame--cart">
+          {hasBelowCostWarning ? (
+            <div className="pos-cart-banner" role="status">
+              {t("pos.belowCostBanner")}
+            </div>
+          ) : null}
+          <PosCartPanel
+            lines={items}
+            onChangeQty={(id, v) => setQty(id, Number(v))}
+            onRemove={removeLine}
+            total={cartSubtotal}
+          />
         </div>
         <div className="pos-checkout-column">
           <div className="pos-column-scroll">
-          <div
-            className="card pos-cart-wrap"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              maxHeight: cartExpanded ? "62vh" : 320,
-              minHeight: 160,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              className="pos-cart-wrap__head"
-              onClick={() => setCartExpanded((v) => !v)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setCartExpanded((v) => !v);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              title={cartExpanded ? "تصغير السلة" : "تكبير السلة"}
-            >
-              <strong>{t("cart.title")}</strong>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                {cartExpanded ? "−" : "+"} ({items.length})
-              </span>
-            </div>
-            {hasBelowCostWarning ? (
-              <div
-                role="status"
-                style={{
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--warning)",
-                  background: "color-mix(in srgb, var(--warning) 14%, transparent)",
-                  borderBottom: "1px solid color-mix(in srgb, var(--warning) 35%, transparent)",
-                }}
-              >
-                {t("pos.belowCostBanner")}
-              </div>
-            ) : null}
-            <div className="pos-cart-wrap__body">
-              <Cart
-                embedded
-                lines={items}
-                onChangeQty={(id, v) => setQty(id, Number(v))}
-                onRemove={removeLine}
-                total={cartSubtotal}
-              />
-            </div>
-          </div>
-
           <div className="card">
             <div style={{ fontWeight: 800, marginBottom: 8 }}>{t("pos.heldList")}</div>
             {heldList.length === 0 ? (

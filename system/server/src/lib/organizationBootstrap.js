@@ -30,6 +30,8 @@ export async function bootstrapOrganization(prisma, input) {
     data: {
       name,
       slug: slugRaw,
+      plan: "FREE",
+      maxBranches: 3,
       ...(businessVertical != null ? { businessVertical } : {}),
     },
   });

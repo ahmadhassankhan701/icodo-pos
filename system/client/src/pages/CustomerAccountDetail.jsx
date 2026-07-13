@@ -3,19 +3,18 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { branchDisplayName } from "../utils/displayLabels.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 export default function CustomerAccountDetail() {
   const { customerId } = useParams();
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [msg, setMsg] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("CASH");
   const [payNote, setPayNote] = useState("");
-  const [branches, setBranches] = useState([]);
-  const [payBranchId, setPayBranchId] = useState(user?.branchId || "");
+  const branchId = useActiveBranchId();
 
   const load = () => {
     setMsg("");
@@ -31,22 +30,11 @@ export default function CustomerAccountDetail() {
     load();
   }, [customerId]);
 
-  useEffect(() => {
-    if (user?.role === "ADMIN" && !user?.branchId) {
-      api("/api/branches")
-        .then((bs) => {
-          setBranches(bs);
-          if (bs[0]) setPayBranchId((prev) => prev || bs[0].id);
-        })
-        .catch(() => {});
-    }
-  }, [user?.role, user?.branchId]);
-
   const submitPay = async (e) => {
     e.preventDefault();
     setMsg("");
     try {
-      const bid = user?.branchId || payBranchId;
+      const bid = branchId;
       if (!bid) {
         setMsg(t("receivable.needBranch"));
         return;
@@ -102,22 +90,6 @@ export default function CustomerAccountDetail() {
       {bal > 0.001 ? (
         <form className="card" onSubmit={submitPay} style={{ marginBottom: 24, display: "grid", gap: 12, maxWidth: 420 }}>
           <strong>{t("receivable.collect")}</strong>
-          {user?.role === "ADMIN" && !user?.branchId && branches.length > 0 ? (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-              <select
-                value={payBranchId}
-                onChange={(e) => setPayBranchId(e.target.value)}
-                style={{ minHeight: 44, padding: "8px 12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {branchDisplayName(b, locale)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("receivable.amount")}</span>
             <input

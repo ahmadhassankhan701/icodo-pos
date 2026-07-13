@@ -2,16 +2,16 @@ import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { findBranchInOrg } from "../lib/orgScope.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 import { resolveStoredImageUrl } from "../lib/productImageUrl.js";
-import { calendarDaysUntilExpiryUTC, DEFAULT_ALERT_DAYS } from "../lib/productExpiry.js";
+import { calendarDaysUntilExpiryUTC } from "../lib/productExpiry.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-/** منتجات ضمن نافذة التنبيه قبل انتهاء الصلاحية (أو منتهية) */
+/** منتجات منتهية الصلاحية أو تنتهي اليوم */
 router.get("/expiry-alerts", async (req, res) => {
   try {
     const branchId =
@@ -35,17 +35,14 @@ router.get("/expiry-alerts", async (req, res) => {
     const out = [];
     for (const p of products) {
       const days = calendarDaysUntilExpiryUTC(p.expiryDate);
-      if (days === null) continue;
-      const windowDays = p.expiryAlertDaysBefore ?? DEFAULT_ALERT_DAYS;
-      if (days > windowDays) continue;
+      if (days === null || days > 0) continue;
       out.push({
         product: {
           ...p,
           imageUrl: resolveStoredImageUrl(p.imageUrl),
         },
         daysUntilExpiry: days,
-        status: days < 0 ? "expired" : "soon",
-        alertDays: windowDays,
+        status: days < 0 ? "expired" : "today",
       });
     }
     out.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
@@ -76,7 +73,7 @@ router.get("/low-stock", async (req, res) => {
   res.json(low);
 });
 
-router.post("/reconcile", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/reconcile", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("stockCount"), async (req, res) => {
   const { branchId, lines } = req.body || {};
   const bid = branchId || req.user.branchId;
   if (!bid) return res.status(400).json({ error: "يجب اختيار الفرع" });
@@ -138,7 +135,7 @@ router.post("/reconcile", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
 });
 
-router.post("/transfer", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/transfer", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("transfer"), async (req, res) => {
   const { fromBranchId, toBranchId, items } = req.body || {};
   const from = String(fromBranchId || "");
   const to = String(toBranchId || "");

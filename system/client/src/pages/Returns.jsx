@@ -11,6 +11,7 @@ import {
 } from "../offline/cache.js";
 import { getOrCreateDeviceId, SYNC_TYPES } from "../offline/db.js";
 import { enqueue } from "../offline/syncQueue.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 const inp = {
   padding: 12,
@@ -22,10 +23,9 @@ const inp = {
 
 export default function Returns() {
   const { t } = useI18n();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { refreshPending, online } = useOffline();
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
+  const branchId = useActiveBranchId();
   const [products, setProducts] = useState([]);
   const [lines, setLines] = useState([{ productId: "", quantity: "1" }]);
   const [saleId, setSaleId] = useState("");
@@ -34,16 +34,7 @@ export default function Returns() {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    api("/api/branches")
-      .then((bs) => {
-        setBranches(bs);
-        if (user?.role === "ADMIN" && !branchId && bs[0]) setBranchId(bs[0].id);
-      })
-      .catch(() => {});
-  }, [user?.role]);
-
-  useEffect(() => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     const q = new URLSearchParams();
     q.set("branchId", bid);
@@ -64,14 +55,14 @@ export default function Returns() {
         const list = await loadProductsForBranch(bid);
         setProducts(list);
       });
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   const loadRefunds = () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       setList([]);
       return Promise.resolve();
     }
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     const p = new URLSearchParams();
     if (bid) p.set("branchId", bid);
     return api(`/api/refunds?${p.toString()}`).then(setList);
@@ -79,12 +70,12 @@ export default function Returns() {
 
   useEffect(() => {
     loadRefunds().catch(() => setList([]));
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   const submit = async (e) => {
     e.preventDefault();
     setMsg("");
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) {
       setMsg(t("returns.needBranch"));
       return;
@@ -150,22 +141,6 @@ export default function Returns() {
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("returns.intro")}</p>
 
       <form className="card" onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-        {isAdmin ? (
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              style={{ ...inp, minHeight: 44 }}
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("returns.saleIdOptional")}</span>
           <input value={saleId} onChange={(e) => setSaleId(e.target.value)} placeholder="cuid…" style={inp} />

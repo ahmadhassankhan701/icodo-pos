@@ -19,10 +19,25 @@ export function branchDisplayName(branch, locale) {
   return branch.name || "";
 }
 
+/** Branch id from the logged-in user (each login is scoped to one branch). */
+export function userBranchId(user) {
+  return user?.branchId ? String(user.branchId) : "";
+}
+
+/** Display name for the user's assigned branch (receipts / store identity). */
+export function userBranchDisplayName(user, locale) {
+  if (!user?.branchId) return "";
+  if (locale === "en") {
+    if (user.branchNameEn?.trim()) return user.branchNameEn.trim();
+    if (user.branchName && BRANCH_EN_FALLBACK[user.branchName]) return BRANCH_EN_FALLBACK[user.branchName];
+  }
+  return user.branchName || "";
+}
+
 /**
- * سطر المستخدم والفرع في الشريط — يعتمد على name/nameEn من الـ API
+ * Sidebar user line — name only (branch is fixed by login; managed under Administration).
  */
-export function formatUserBranchLine(user, locale, allBranchesLabel) {
+export function formatUserBranchLine(user, locale) {
   if (!user) return "";
   const en = locale === "en";
   let userName = user.name || "";
@@ -30,13 +45,5 @@ export function formatUserBranchLine(user, locale, allBranchesLabel) {
     if (user.nameEn?.trim()) userName = user.nameEn.trim();
     else if (USER_EN_FALLBACK[user.name]) userName = USER_EN_FALLBACK[user.name];
   }
-  if (!user.branchId) {
-    return `${userName} — ${allBranchesLabel}`;
-  }
-  let branch = user.branchName || "";
-  if (en) {
-    if (user.branchNameEn?.trim()) branch = user.branchNameEn.trim();
-    else if (user.branchName && BRANCH_EN_FALLBACK[user.branchName]) branch = BRANCH_EN_FALLBACK[user.branchName];
-  }
-  return `${userName} — ${branch}`;
+  return userName;
 }

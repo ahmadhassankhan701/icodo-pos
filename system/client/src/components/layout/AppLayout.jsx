@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useI18n } from "../../context/LanguageContext.jsx";
-import { formatUserBranchLine } from "../../utils/displayLabels.js";
+import { useTheme } from "../../context/ThemeContext.jsx";
+import { useBranchContext } from "../../context/BranchContext.jsx";
+import { formatUserBranchLine, branchDisplayName } from "../../utils/displayLabels.js";
 import { OfflineBanner } from "../OfflineBanner.jsx";
 import { useAlertsBadgeCount } from "../../hooks/useAlertsBadgeCount.js";
 import { isVerticalFeatureEnabled } from "../../lib/verticalFeatures.js";
@@ -16,7 +18,7 @@ function navSectionForPath(pathname) {
   if (p.startsWith("/dashboard") || p.startsWith("/alerts") || p.startsWith("/sync-queue")) {
     return "dashboard";
   }
-  if (p.startsWith("/products") || p.startsWith("/cash")) return "inventory";
+  if (p.startsWith("/products") || p.startsWith("/categories") || p.startsWith("/cash")) return "inventory";
   if (
     p.startsWith("/customer-accounts") ||
     p.startsWith("/audit") ||
@@ -25,7 +27,7 @@ function navSectionForPath(pathname) {
   ) {
     return "profile";
   }
-  if (p.startsWith("/users") || p.startsWith("/branches") || p.startsWith("/platform")) {
+  if (p.startsWith("/users") || p.startsWith("/branches") || p.startsWith("/platform") || p.startsWith("/permissions")) {
     return "admin";
   }
   return "";
@@ -85,9 +87,19 @@ function SidebarNavSection({ sectionId, title, icon, expanded, onToggle, t, chil
 }
 
 export function AppLayout() {
-  const { user, logout, isAdmin, isManager, isPlatformAdmin } = useAuth();
+  const { user, logout, isAdmin, isManager, isPlatformAdmin, can } = useAuth();
+  const { isDark } = useTheme();
+  const {
+    branches,
+    activeBranchId,
+    setActiveBranchId,
+    canSwitchBranch,
+  } = useBranchContext();
   const bv = user?.businessVertical;
   const { t, locale } = useI18n();
+  const sidebarLogoSrc = isDark
+    ? "/icodo-icon-dark.png?v=2"
+    : "/icodo-sidebar-light.png?v=2";
   const nav = useNavigate();
   const location = useLocation();
   const { count: alertsBadge } = useAlertsBadgeCount();
@@ -114,9 +126,32 @@ export function AppLayout() {
       <aside className="app-sidebar" aria-label={t("nav.brand")}>
         <div className="app-sidebar-header">
           <div className="app-sidebar-brand">
-            <img src="/favicon.png" alt="i codo" className="app-sidebar-favicon" width={36} height={36} />
-            <span className="app-sidebar-brand-text">i codo</span>
+            <img
+              src={sidebarLogoSrc}
+              alt="Icodo"
+              className={`app-sidebar-logo${isDark ? " app-sidebar-logo--dark" : " app-sidebar-logo--light"}`}
+              decoding="async"
+            />
           </div>
+          {canSwitchBranch ? (
+            <label className="app-sidebar-branch">
+              <span className="app-sidebar-branch-label">{t("branchContext.label")}</span>
+              <select
+                value={activeBranchId || ""}
+                onChange={(e) => setActiveBranchId(e.target.value)}
+                aria-label={t("branchContext.pick")}
+              >
+                {branches.length === 0 ? (
+                  <option value="">{t("branchContext.pick")}</option>
+                ) : null}
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {branchDisplayName(b, locale)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <nav className="app-sidebar-nav">
@@ -149,10 +184,12 @@ export function AppLayout() {
             </NavLink>
           </SidebarNavSection>
 
-          <NavLink to="/pos" className={sidebarLinkClass} end>
-            <SidebarIcon name="pos" />
-            <span>{t("nav.pos")}</span>
-          </NavLink>
+          {can("pos") ? (
+            <NavLink to="/pos" className={sidebarLinkClass} end>
+              <SidebarIcon name="pos" />
+              <span>{t("nav.pos")}</span>
+            </NavLink>
+          ) : null}
 
           <SidebarNavSection
             sectionId="inventory"
@@ -162,14 +199,24 @@ export function AppLayout() {
             onToggle={() => toggleNavSection("inventory")}
             t={t}
           >
-            <NavLink to="/products" className={sidebarLinkClass}>
-              <SidebarIcon name="products" />
-              <span>{t("nav.products")}</span>
-            </NavLink>
-            <NavLink to="/cash" className={sidebarLinkClass}>
-              <SidebarIcon name="funds" />
-              <span>{t("nav.funds")}</span>
-            </NavLink>
+            {can("productsView") ? (
+              <NavLink to="/products" className={sidebarLinkClass}>
+                <SidebarIcon name="products" />
+                <span>{t("nav.products")}</span>
+              </NavLink>
+            ) : null}
+            {can("catalogEdit") ? (
+              <NavLink to="/categories" className={sidebarLinkClass}>
+                <SidebarIcon name="categories" />
+                <span>{t("nav.categories")}</span>
+              </NavLink>
+            ) : null}
+            {can("cashSession") ? (
+              <NavLink to="/cash" className={sidebarLinkClass}>
+                <SidebarIcon name="funds" />
+                <span>{t("nav.funds")}</span>
+              </NavLink>
+            ) : null}
           </SidebarNavSection>
 
           <SidebarNavSection
@@ -180,23 +227,25 @@ export function AppLayout() {
             onToggle={() => toggleNavSection("profile")}
             t={t}
           >
-            {isVerticalFeatureEnabled("customerAccounts", bv) ? (
+            {can("receivables") && isVerticalFeatureEnabled("customerAccounts", bv) ? (
               <NavLink to="/customer-accounts" className={sidebarLinkClass}>
                 <SidebarIcon name="accounts" />
                 <span>{t("nav.accounts")}</span>
               </NavLink>
             ) : null}
-            {isManager ? (
+            {can("audit") ? (
               <NavLink to="/audit" className={sidebarLinkClass}>
                 <SidebarIcon name="audit" />
                 <span>{t("nav.auditLogs")}</span>
               </NavLink>
             ) : null}
-            <NavLink to="/customers" className={sidebarLinkClass}>
-              <SidebarIcon name="customers" />
-              <span>{t("nav.customers")}</span>
-            </NavLink>
-            {isManager ? (
+            {can("customers") ? (
+              <NavLink to="/customers" className={sidebarLinkClass}>
+                <SidebarIcon name="customers" />
+                <span>{t("nav.customers")}</span>
+              </NavLink>
+            ) : null}
+            {can("loyalty") ? (
               <NavLink to="/loyalty" className={sidebarLinkClass}>
                 <SidebarIcon name="coupons" />
                 <span>{t("nav.coupons")}</span>
@@ -225,6 +274,12 @@ export function AppLayout() {
               </NavLink>
             ) : null}
             {isAdmin ? (
+              <NavLink to="/permissions" className={sidebarLinkClass}>
+                <SidebarIcon name="audit" />
+                <span>{t("nav.permissions")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin ? (
               <NavLink to="/branches" className={sidebarLinkClass}>
                 <SidebarIcon name="branches" />
                 <span>{t("nav.branches")}</span>
@@ -239,7 +294,12 @@ export function AppLayout() {
         </nav>
 
         <div className="app-sidebar-footer">
-          <div className="app-sidebar-user">{formatUserBranchLine(user, locale, t("nav.allBranches"))}</div>
+          <div className="app-sidebar-user">
+            {formatUserBranchLine(user, locale)}
+            {user?.role ? (
+              <div className="app-sidebar-role">{t(`role.${user.role}`)}</div>
+            ) : null}
+          </div>
           <button
             type="button"
             className="app-sidebar-logout"

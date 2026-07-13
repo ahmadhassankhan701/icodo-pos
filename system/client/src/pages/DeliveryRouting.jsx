@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 const inp = {
   padding: 12,
@@ -27,9 +28,8 @@ function FitMapBounds({ points }) {
 
 export default function DeliveryRouting() {
   const { t, locale } = useI18n();
-  const { user, isAdmin } = useAuth();
-  const [branchId, setBranchId] = useState(user?.branchId || "");
-  const [branches, setBranches] = useState([]);
+  const { user } = useAuth();
+  const branchId = useActiveBranchId();
   const [date, setDate] = useState(today());
   const [addressText, setAddressText] = useState("");
   const [priority, setPriority] = useState("0");
@@ -55,7 +55,7 @@ export default function DeliveryRouting() {
   };
 
   const load = async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     const q = new URLSearchParams();
     q.set("branchId", bid);
@@ -69,17 +69,8 @@ export default function DeliveryRouting() {
   };
 
   useEffect(() => {
-    api("/api/branches")
-      .then((b) => {
-        setBranches(b || []);
-        if (isAdmin && !branchId && b?.[0]?.id) setBranchId(b[0].id);
-      })
-      .catch(() => setBranches([]));
-  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     load().catch(() => {});
-  }, [branchId, user?.branchId, date]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [branchId, date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
@@ -87,11 +78,11 @@ export default function DeliveryRouting() {
       load().catch(() => {});
     }, 15000);
     return () => clearInterval(id);
-  }, [autoRefresh, branchId, user?.branchId, date]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoRefresh, branchId, date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createOrder = async (e) => {
     e.preventDefault();
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     setMsg("");
     try {
@@ -118,7 +109,7 @@ export default function DeliveryRouting() {
   };
 
   const buildRoute = async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     setMsg("");
     try {
@@ -227,14 +218,6 @@ export default function DeliveryRouting() {
       <p style={{ margin: 0, color: "var(--muted)" }}>{t("delivery.intro")}</p>
 
       <div className="card" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
-        {isAdmin ? (
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={{ ...inp, minWidth: 180 }}>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </label>
-        ) : null}
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("delivery.date")}</span>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inp} />

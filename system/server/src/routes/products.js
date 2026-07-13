@@ -12,13 +12,13 @@ import {
   parseNumber,
   parseExpiryCell,
 } from "../lib/productsExcel.js";
-import { DEFAULT_ALERT_DAYS } from "../lib/productExpiry.js";
 import {
   allocateUniqueBarcode,
   assertBarcodeAvailable,
 } from "../lib/productBarcode.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { writeAudit } from "../lib/auditLog.js";
+import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -38,6 +38,142 @@ function withResolvedImageUrl(product) {
     ...product,
     imageUrl: resolveStoredImageUrl(product.imageUrl),
   };
+}
+
+async function resolveCatalogLinks(orgId, { categoryId, subcategoryId, sku, requireCatalogSku = true }) {
+  let resolvedCategoryId = null;
+  let resolvedSubcategoryId = null;
+  let resolvedSku = sku != null && String(sku).trim() ? String(sku).trim() : null;
+  let categoryLabel = null;
+
+  if (categoryId) {
+    const cat = await prisma.category.findFirst({
+      where: { id: String(categoryId), organizationId: orgId },
+    });
+    if (!cat) {
+      const err = new Error("Invalid category");
+      err.status = 400;
+      throw err;
+    }
+    resolvedCategoryId = cat.id;
+    categoryLabel = cat.nameEn?.trim() || cat.name;
+  }
+
+  if (subcategoryId) {
+    const sub = await prisma.subcategory.findFirst({
+      where: { id: String(subcategoryId), organizationId: orgId },
+    });
+    if (!sub) {
+      const err = new Error("Invalid subcategory");
+      err.status = 400;
+      throw err;
+    }
+    if (resolvedCategoryId && sub.categoryId !== resolvedCategoryId) {
+      const err = new Error("Subcategory does not belong to the selected category");
+      err.status = 400;
+      throw err;
+    }
+    resolvedSubcategoryId = sub.id;
+    if (!resolvedCategoryId) resolvedCategoryId = sub.categoryId;
+  }
+
+  if (resolvedSku && requireCatalogSku) {
+    const catalog = await prisma.catalogSku.findFirst({
+      where: { organizationId: orgId, code: resolvedSku },
+    });
+    if (!catalog) {
+      const err = new Error("SKU must be selected from the catalog");
+      err.status = 400;
+      throw err;
+    }
+    if (
+      catalog.subcategoryId &&
+      resolvedSubcategoryId &&
+      catalog.subcategoryId !== resolvedSubcategoryId
+    ) {
+      const err = new Error("SKU does not belong to the selected subcategory");
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  return {
+    categoryId: resolvedCategoryId,
+    subcategoryId: resolvedSubcategoryId,
+    sku: resolvedSku,
+    category: categoryLabel,
+  };
+}
+
+/** Resolve catalog IDs from Excel name/code columns (best-effort for import). */
+async function resolveCatalogFromExcel(orgId, { categoryName, subcategoryName, sku }) {
+  let categoryId = null;
+  let subcategoryId = null;
+  let categoryLabel =
+    categoryName != null && String(categoryName).trim() ? String(categoryName).trim() : null;
+  let resolvedSku = sku != null && String(sku).trim() ? String(sku).trim() : null;
+
+  const nameMatch = (row, raw) => {
+    const key = String(raw).trim().toLowerCase();
+    if (!key) return false;
+    return (
+      String(row.name || "")
+        .trim()
+        .toLowerCase() === key ||
+      (row.nameEn &&
+        String(row.nameEn)
+          .trim()
+          .toLowerCase() === key)
+    );
+  };
+
+  if (categoryLabel) {
+    const cats = await prisma.category.findMany({ where: { organizationId: orgId } });
+    const cat = cats.find((c) => nameMatch(c, categoryLabel));
+    if (cat) {
+      categoryId = cat.id;
+      categoryLabel = cat.nameEn?.trim() || cat.name;
+    }
+  }
+
+  const subLabel =
+    subcategoryName != null && String(subcategoryName).trim()
+      ? String(subcategoryName).trim()
+      : null;
+  if (subLabel) {
+    const subs = await prisma.subcategory.findMany({
+      where: {
+        organizationId: orgId,
+        ...(categoryId ? { categoryId } : {}),
+      },
+    });
+    const sub = subs.find((s) => nameMatch(s, subLabel));
+    if (sub) {
+      subcategoryId = sub.id;
+      if (!categoryId) categoryId = sub.categoryId;
+      if (!categoryLabel) {
+        const cat = await prisma.category.findFirst({ where: { id: sub.categoryId } });
+        categoryLabel = cat?.nameEn?.trim() || cat?.name || categoryLabel;
+      }
+    }
+  }
+
+  if (resolvedSku) {
+    const catalog = await prisma.catalogSku.findFirst({
+      where: { organizationId: orgId, code: resolvedSku },
+    });
+    if (catalog?.subcategoryId && !subcategoryId) {
+      subcategoryId = catalog.subcategoryId;
+      const sub = await prisma.subcategory.findFirst({ where: { id: catalog.subcategoryId } });
+      if (sub && !categoryId) {
+        categoryId = sub.categoryId;
+        const cat = await prisma.category.findFirst({ where: { id: sub.categoryId } });
+        categoryLabel = cat?.nameEn?.trim() || cat?.name || categoryLabel;
+      }
+    }
+  }
+
+  return { categoryId, subcategoryId, sku: resolvedSku, category: categoryLabel };
 }
 
 const isSqlite = () => {
@@ -69,8 +205,9 @@ router.get("/", async (req, res) => {
       : true,
     brand: { select: { id: true, name: true, nameEn: true } },
     productCategory: { select: { id: true, name: true, nameEn: true } },
+    productSubcategory: { select: { id: true, name: true, nameEn: true, categoryId: true } },
   };
-  const orderBy = { name: "asc" };
+  const orderBy = { createdAt: "desc" };
 
   const paginate =
     page !== undefined ||
@@ -135,10 +272,12 @@ router.get("/export/excel", requireRole("ADMIN", "MANAGER"), async (req, res, ne
 
     const products = await prisma.product.findMany({
       where: { organizationId: orgId },
-      orderBy: { name: "asc" },
-      ...(branchId
-        ? { include: { inventories: { where: { branchId } } } }
-        : {}),
+      orderBy: { createdAt: "desc" },
+      include: {
+        productCategory: { select: { id: true, name: true, nameEn: true } },
+        productSubcategory: { select: { id: true, name: true, nameEn: true } },
+        ...(branchId ? { inventories: { where: { branchId } } } : {}),
+      },
     });
 
     const inventoryByProductId = new Map();
@@ -150,6 +289,14 @@ router.get("/export/excel", requireRole("ADMIN", "MANAGER"), async (req, res, ne
     }
 
     const buffer = buildProductsExcelBuffer(products, inventoryByProductId);
+    await writeAudit({
+      userId: req.user.sub,
+      action: "PRODUCT_EXPORT",
+      entityType: "Product",
+      branchId: branchId || req.user.branchId || null,
+      summary: `Exported ${products.length} products to Excel`,
+      meta: { count: products.length, branchId },
+    });
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -219,7 +366,12 @@ router.post(
         const stockQty = Math.max(0, Math.floor(parseNumber(r.stockQty) ?? 0));
         const minStock = Math.max(0, Math.floor(parseNumber(r.minStock) ?? 5));
         const expDate = parseExpiryCell(r.expiryDate);
-        const expAlertRaw = parseNumber(r.expiryAlertDaysBefore);
+
+        const catalog = await resolveCatalogFromExcel(orgId, {
+          categoryName: r.category,
+          subcategoryName: r.subcategory,
+          sku,
+        });
 
         const baseData = {
           name,
@@ -228,7 +380,7 @@ router.post(
             r.description != null && String(r.description).trim()
               ? String(r.description).trim()
               : null,
-          sku,
+          sku: catalog.sku,
           barcode,
           price: new Prisma.Decimal(priceNum),
           wholesalePrice:
@@ -236,15 +388,13 @@ router.post(
           cost:
             costRaw != null && costRaw >= 0 ? new Prisma.Decimal(costRaw) : null,
           petType,
-          category: r.category != null && String(r.category).trim() ? String(r.category).trim() : null,
+          category: catalog.category,
+          categoryId: catalog.categoryId,
+          subcategoryId: catalog.subcategoryId,
           imageUrl: r.imageUrl != null && String(r.imageUrl).trim() ? String(r.imageUrl).trim() : null,
           isActive,
           expiryDate: expDate,
-          expiryAlertDaysBefore: expDate
-            ? expAlertRaw != null && expAlertRaw >= 0
-              ? Math.min(Math.floor(expAlertRaw), 3650)
-              : DEFAULT_ALERT_DAYS
-            : null,
+          expiryAlertDaysBefore: null,
         };
 
         let existing = null;
@@ -334,6 +484,20 @@ router.post(
         });
       }
 
+      await writeAudit({
+        userId: req.user.sub,
+        action: "PRODUCT_IMPORT",
+        entityType: "Product",
+        branchId,
+        summary: `Excel import: ${created} created, ${updated} updated, ${errors.length} errors`,
+        meta: {
+          created,
+          updated,
+          errorCount: errors.length,
+          productIds: [...touchedProductIds].slice(0, 50),
+        },
+      });
+
       res.json({ ok: true, created, updated, errors, errorCount: errors.length });
     } catch (e) {
       next(e);
@@ -348,6 +512,7 @@ router.get("/:id", async (req, res) => {
       inventories: true,
       brand: { select: { id: true, name: true, nameEn: true } },
       productCategory: { select: { id: true, name: true, nameEn: true } },
+      productSubcategory: { select: { id: true, name: true, nameEn: true, categoryId: true } },
     },
   });
   if (!p) return res.status(404).json({ error: "المنتج غير موجود" });
@@ -392,7 +557,7 @@ router.get("/:id/lots", async (req, res) => {
   res.json({ product, branchId, lots });
 });
 
-router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("productsEdit"), async (req, res) => {
   const {
     name,
     nameEn,
@@ -403,15 +568,22 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
     wholesalePrice,
     cost,
     petType,
-    category,
+    categoryId,
+    subcategoryId,
     imageUrl,
     branchId,
     initialStock,
     minStockLevel,
     expiryDate: expiryDateRaw,
-    expiryAlertDaysBefore: expiryAlertRaw,
   } = req.body || {};
-  if (!name?.trim()) return res.status(400).json({ error: "اسم المنتج مطلوب" });
+  if (!nameEn?.trim()) return res.status(400).json({ error: "English product name is required" });
+  if (!categoryId) return res.status(400).json({ error: "Category is required" });
+  const imageTrim = imageUrl != null ? String(imageUrl).trim() : "";
+  if (!imageTrim) return res.status(400).json({ error: "Image URL is required" });
+  if (!/^https?:\/\/\S+/i.test(imageTrim) && !imageTrim.startsWith("/")) {
+    return res.status(400).json({ error: "Image URL must be http(s) or a path starting with /" });
+  }
+  const nameLocal = name?.trim() || "";
   const priceNum = Number(price);
   if (Number.isNaN(priceNum) || priceNum < 0) {
     return res.status(400).json({ error: "سعر غير صالح" });
@@ -421,6 +593,18 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   const br = await findBranchInOrg(prisma, req.user.organizationId, bid);
   if (!br) return res.status(400).json({ error: "فرع غير صالح" });
 
+  let catalog;
+  try {
+    catalog = await resolveCatalogLinks(req.user.organizationId, {
+      categoryId,
+      subcategoryId,
+      sku,
+    });
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+
   let expiryDate = null;
   if (expiryDateRaw != null && String(expiryDateRaw).trim()) {
     const d = new Date(String(expiryDateRaw));
@@ -428,18 +612,6 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       return res.status(400).json({ error: "تاريخ انتهاء الصلاحية غير صالح" });
     }
     expiryDate = d;
-  }
-  let expiryAlertDaysBefore = null;
-  if (expiryDate) {
-    if (expiryAlertRaw != null && String(expiryAlertRaw).trim() !== "") {
-      const n = Math.floor(Number(expiryAlertRaw));
-      if (!Number.isFinite(n) || n < 0) {
-        return res.status(400).json({ error: "فترة التنبيه قبل الانتهاء غير صالحة" });
-      }
-      expiryAlertDaysBefore = Math.min(n, 3650);
-    } else {
-      expiryAlertDaysBefore = DEFAULT_ALERT_DAYS;
-    }
   }
 
   const barcodeTrim = barcode?.trim() || null;
@@ -455,10 +627,10 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
     product = await prisma.product.create({
     data: {
       organizationId: req.user.organizationId,
-      name: name.trim(),
-      nameEn: nameEn?.trim() || null,
+      name: nameLocal || nameEn.trim(),
+      nameEn: nameEn.trim(),
       description: description?.trim() || null,
-      sku: sku?.trim() || null,
+      sku: catalog.sku,
       barcode: barcodeTrim,
       price: new Prisma.Decimal(priceNum),
       wholesalePrice:
@@ -472,10 +644,12 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       petType: ["CAT", "DOG", "OTHER"].includes(String(petType))
         ? String(petType)
         : "OTHER",
-      category: category != null && String(category).trim() ? String(category).trim() : null,
-      imageUrl: imageUrl?.trim() || null,
+      category: catalog.category,
+      categoryId: catalog.categoryId,
+      subcategoryId: catalog.subcategoryId,
+      imageUrl: imageTrim,
       expiryDate,
-      expiryAlertDaysBefore,
+      expiryAlertDaysBefore: null,
       inventories: {
         create: {
           branchId: bid,
@@ -505,16 +679,39 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       },
     ],
   });
+  await writeAudit({
+    userId: req.user.sub,
+    action: "PRODUCT_CREATE",
+    entityType: "Product",
+    entityId: product.id,
+    branchId: bid,
+    summary: `Created product "${product.nameEn || product.name}" (SKU: ${product.sku || "—"})`,
+    meta: {
+      sku: product.sku,
+      barcode: product.barcode,
+      price: Number(product.price),
+      categoryId: product.categoryId,
+      subcategoryId: product.subcategoryId,
+      initialStock: Math.max(0, Number(initialStock) || 0),
+      minStockLevel: Math.max(0, Number(minStockLevel) || 5),
+    },
+  });
   res.status(201).json(withResolvedImageUrl(product));
 });
 
-router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.patch("/:id", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("productsEdit"), async (req, res) => {
   const data = req.body || {};
   const update = {};
-  if (data.name != null) update.name = String(data.name).trim();
-  if (data.nameEn !== undefined) update.nameEn = data.nameEn?.trim() || null;
+  if (data.nameEn !== undefined) {
+    if (!String(data.nameEn || "").trim()) {
+      return res.status(400).json({ error: "English product name is required" });
+    }
+    update.nameEn = String(data.nameEn).trim();
+  }
+  if (data.name !== undefined) {
+    update.name = String(data.name || "").trim();
+  }
   if (data.description !== undefined) update.description = data.description?.trim() || null;
-  if (data.sku !== undefined) update.sku = data.sku?.trim() || null;
   if (data.barcode !== undefined) update.barcode = data.barcode?.trim() || null;
   if (data.price != null) update.price = new Prisma.Decimal(Number(data.price));
   if (data.cost !== undefined) {
@@ -532,17 +729,53 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   if (data.petType && ["CAT", "DOG", "OTHER"].includes(String(data.petType))) {
     update.petType = String(data.petType);
   }
-  if (data.imageUrl !== undefined) update.imageUrl = data.imageUrl?.trim() || null;
+  if (data.imageUrl !== undefined) {
+    const img = data.imageUrl != null ? String(data.imageUrl).trim() : "";
+    if (!img) return res.status(400).json({ error: "Image URL is required" });
+    if (!/^https?:\/\/\S+/i.test(img) && !img.startsWith("/")) {
+      return res.status(400).json({ error: "Image URL must be http(s) or a path starting with /" });
+    }
+    update.imageUrl = img;
+  }
   if (data.externalId !== undefined) update.externalId = data.externalId?.trim() || null;
-  if (data.category !== undefined) update.category = data.category?.trim() || null;
   if (data.brandId !== undefined) update.brandId = data.brandId || null;
-  if (data.categoryId !== undefined) update.categoryId = data.categoryId || null;
   if (data.isActive !== undefined) update.isActive = Boolean(data.isActive);
 
   const existing = await prisma.product.findFirst({
     where: { id: req.params.id, organizationId: req.user.organizationId },
   });
   if (!existing) return res.status(404).json({ error: "المنتج غير موجود" });
+
+  if (
+    data.categoryId !== undefined ||
+    data.subcategoryId !== undefined ||
+    data.sku !== undefined
+  ) {
+    try {
+      const catalog = await resolveCatalogLinks(req.user.organizationId, {
+        categoryId:
+          data.categoryId !== undefined ? data.categoryId || null : existing.categoryId,
+        subcategoryId:
+          data.subcategoryId !== undefined
+            ? data.subcategoryId || null
+            : existing.subcategoryId,
+        sku: data.sku !== undefined ? data.sku || null : existing.sku,
+        requireCatalogSku: data.sku !== undefined,
+      });
+      update.categoryId = catalog.categoryId;
+      update.subcategoryId = catalog.subcategoryId;
+      update.category = catalog.category;
+      if (data.sku !== undefined) update.sku = catalog.sku;
+    } catch (e) {
+      if (e?.status === 400) return res.status(400).json({ error: e.message });
+      throw e;
+    }
+  }
+
+  const nextEn = update.nameEn ?? existing.nameEn;
+  if (update.name !== undefined && !update.name) {
+    update.name = nextEn || existing.name;
+  }
 
   if (data.barcode !== undefined) {
     try {
@@ -568,32 +801,7 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
         return res.status(400).json({ error: "تاريخ انتهاء الصلاحية غير صالح" });
       }
       update.expiryDate = d;
-      if (data.expiryAlertDaysBefore !== undefined) {
-        if (data.expiryAlertDaysBefore === null || data.expiryAlertDaysBefore === "") {
-          update.expiryAlertDaysBefore = DEFAULT_ALERT_DAYS;
-        } else {
-          const n = Math.floor(Number(data.expiryAlertDaysBefore));
-          if (!Number.isFinite(n) || n < 0) {
-            return res.status(400).json({ error: "فترة التنبيه قبل الانتهاء غير صالحة" });
-          }
-          update.expiryAlertDaysBefore = Math.min(n, 3650);
-        }
-      } else {
-        update.expiryAlertDaysBefore = existing.expiryAlertDaysBefore ?? DEFAULT_ALERT_DAYS;
-      }
-    }
-  } else if (data.expiryAlertDaysBefore !== undefined) {
-    if (!existing.expiryDate) {
-      return res.status(400).json({ error: "حدّد تاريخ انتهاء الصلاحية أولاً أو امسح التنبيه" });
-    }
-    if (data.expiryAlertDaysBefore === null || data.expiryAlertDaysBefore === "") {
-      update.expiryAlertDaysBefore = DEFAULT_ALERT_DAYS;
-    } else {
-      const n = Math.floor(Number(data.expiryAlertDaysBefore));
-      if (!Number.isFinite(n) || n < 0) {
-        return res.status(400).json({ error: "فترة التنبيه قبل الانتهاء غير صالحة" });
-      }
-      update.expiryAlertDaysBefore = Math.min(n, 3650);
+      update.expiryAlertDaysBefore = null;
     }
   }
 
@@ -602,6 +810,31 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
       where: { id: existing.id },
       data: update,
       include: { inventories: true },
+    });
+    const onlyActive =
+      Object.keys(update).length === 1 && update.isActive !== undefined;
+    await writeAudit({
+      userId: req.user.sub,
+      action: onlyActive
+        ? update.isActive
+          ? "PRODUCT_ENABLE"
+          : "PRODUCT_DISABLE"
+        : "PRODUCT_UPDATE",
+      entityType: "Product",
+      entityId: p.id,
+      branchId: req.user.branchId || null,
+      summary: onlyActive
+        ? `${update.isActive ? "Enabled" : "Disabled"} product "${p.nameEn || p.name}"`
+        : `Updated product "${p.nameEn || p.name}" (SKU: ${p.sku || "—"})`,
+      meta: {
+        changes: Object.keys(update),
+        sku: p.sku,
+        barcode: p.barcode,
+        price: Number(p.price),
+        isActive: p.isActive,
+        categoryId: p.categoryId,
+        subcategoryId: p.subcategoryId,
+      },
     });
     res.json(withResolvedImageUrl(p));
   } catch (e) {
@@ -621,6 +854,21 @@ router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: "المنتج غير موجود" });
     await prisma.product.delete({ where: { id: existing.id } });
+    await writeAudit({
+      userId: req.user.sub,
+      action: "PRODUCT_DELETE",
+      entityType: "Product",
+      entityId: existing.id,
+      branchId: req.user.branchId || null,
+      summary: `Deleted product "${existing.nameEn || existing.name}" (SKU: ${existing.sku || "—"})`,
+      meta: {
+        sku: existing.sku,
+        barcode: existing.barcode,
+        price: Number(existing.price),
+        categoryId: existing.categoryId,
+        subcategoryId: existing.subcategoryId,
+      },
+    });
     res.status(204).send();
   } catch (e) {
     if (e?.code === "P2003") {

@@ -14,32 +14,37 @@ export function parseExpiryCell(v) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function categoryName(p) {
+  return p.productCategory?.name || p.category || "";
+}
+
+function subcategoryName(p) {
+  return p.productSubcategory?.name || "";
+}
+
 /**
- * @param {Array<{ id: string, sku?: string|null, barcode?: string|null, name: string, nameEn?: string|null, description?: string|null, price: unknown, cost?: unknown|null, petType: string, category?: string|null, imageUrl?: string|null, isActive: boolean, inventories?: Array<{ quantity: number, minStockLevel: number }> }>} products
- * @param {Map<string, { quantity: number, minStockLevel: number }>|null} inventoryByProductId
+ * Export columns aligned with current product + catalog model.
  */
 export function buildProductsExcelBuffer(products, inventoryByProductId) {
   const rows = products.map((p) => {
     const inv = inventoryByProductId?.get(p.id);
     return {
       id: p.id,
+      nameEn: p.nameEn ?? "",
+      name: p.name ?? "",
       sku: p.sku ?? "",
       barcode: p.barcode ?? "",
-      name: p.name,
-      nameEn: p.nameEn ?? "",
-      description: p.description ?? "",
+      category: categoryName(p),
+      subcategory: subcategoryName(p),
+      cost: p.cost != null ? Number(p.cost) : "",
       price: Number(p.price),
       wholesalePrice: p.wholesalePrice != null ? Number(p.wholesalePrice) : "",
-      cost: p.cost != null ? Number(p.cost) : "",
-      petType: p.petType,
-      category: p.category ?? "",
       imageUrl: p.imageUrl ?? "",
       isActive: p.isActive ? "yes" : "no",
       stockQty: inv ? inv.quantity : "",
       minStock: inv ? inv.minStockLevel : "",
       expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().slice(0, 10) : "",
-      expiryAlertDaysBefore:
-        p.expiryAlertDaysBefore != null ? Number(p.expiryAlertDaysBefore) : "",
+      description: p.description ?? "",
     };
   });
   const ws = XLSX.utils.json_to_sheet(rows);

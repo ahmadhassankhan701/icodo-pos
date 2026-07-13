@@ -32,8 +32,8 @@ export function InvoicePrint({ sale, branchName }) {
     <div>
       <h2 style={{ margin: "0 0 16px", fontSize: 22 }}>{t("invoice.title")}</h2>
       <div style={{ marginBottom: 12, fontSize: 13 }}>
-        <div>
-          {t("invoice.branch")} {branchName || sale.branch?.name || "—"}
+        <div style={{ fontWeight: 700 }}>
+          {branchName || sale.branch?.name || "—"}
         </div>
         <div>
           {t("invoice.date")} {new Date(sale.createdAt).toLocaleString(loc)}

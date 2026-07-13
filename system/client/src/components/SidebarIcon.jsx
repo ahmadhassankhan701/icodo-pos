@@ -74,6 +74,16 @@ export function SidebarIcon({ name, size = 18 }) {
           <path d="M4 8l8 4 8-4" />
         </svg>
       );
+    case "categories":
+      return (
+        <svg {...props}>
+          <path d="M4 6h16" />
+          <path d="M4 12h10" />
+          <path d="M4 18h14" />
+          <circle cx="18" cy="12" r="1.5" fill="currentColor" stroke="none" />
+          <circle cx="20" cy="18" r="1.5" fill="currentColor" stroke="none" />
+        </svg>
+      );
     case "funds":
       return (
         <svg {...props}>

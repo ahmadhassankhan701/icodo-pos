@@ -2,17 +2,16 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { branchDisplayName } from "../utils/displayLabels.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
 export default function Zakat() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { user } = useAuth();
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState("");
+  const branchId = useActiveBranchId();
   const [snap, setSnap] = useState(null);
   const [msg, setMsg] = useState("");
   const [nisab, setNisab] = useState("");
@@ -20,16 +19,10 @@ export default function Zakat() {
   const [manualAdd, setManualAdd] = useState("");
   const [manualDeduct, setManualDeduct] = useState("");
 
-  useEffect(() => {
-    api("/api/branches")
-      .then(setBranches)
-      .catch(() => setBranches([]));
-  }, []);
-
   const load = () => {
     setMsg("");
     const q = new URLSearchParams();
-    if (user?.role === "ADMIN" && branchId) q.set("branchId", branchId);
+    if (branchId) q.set("branchId", branchId);
     return api(`/api/zakat/snapshot?${q.toString()}`)
       .then(setSnap)
       .catch((e) => {
@@ -56,32 +49,9 @@ export default function Zakat() {
       <h1 style={{ marginTop: 0 }}>{t("zakat.title")}</h1>
       <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6 }}>{t("zakat.intro")}</p>
 
-      {user?.role === "ADMIN" ? (
-        <div style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("zakat.filterBranch")}</span>
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              style={{ minHeight: 44, minWidth: 200, padding: "8px 12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }}
-            >
-              <option value="">{t("zakat.allBranches")}</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {branchDisplayName(b, locale)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="btn-touch" style={{ marginTop: 20, background: "var(--surface2)" }} onClick={() => load()}>
-            {t("zakat.refresh")}
-          </button>
-        </div>
-      ) : (
-        <button type="button" className="btn-touch" style={{ marginBottom: 16, background: "var(--surface2)" }} onClick={() => load()}>
-          {t("zakat.refresh")}
-        </button>
-      )}
+      <button type="button" className="btn-touch" style={{ marginBottom: 16, background: "var(--surface2)" }} onClick={() => load()}>
+        {t("zakat.refresh")}
+      </button>
 
       {msg ? <p style={{ color: "var(--danger)" }}>{msg}</p> : null}
 
@@ -197,14 +167,12 @@ export default function Zakat() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "start" }}>
-                    <th style={{ padding: "6px 4px" }}>{t("zakat.colBranch")}</th>
                     <th style={{ padding: "6px 4px", textAlign: "end" }}>{t("zakat.colEstimated")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {snap.sessionBreakdown.map((s) => (
                     <tr key={s.sessionId} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td style={{ padding: "8px 4px" }}>{s.branchName || "—"}</td>
                       <td style={{ padding: "8px 4px", textAlign: "end" }}>
                         {Number(s.estimatedCash).toFixed(2)} {t("common.currency")}
                       </td>

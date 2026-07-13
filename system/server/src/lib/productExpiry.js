@@ -7,5 +7,3 @@ export function calendarDaysUntilExpiryUTC(expiryDate) {
   const utcT = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
   return Math.round((utcE - utcT) / 86400000);
 }
-
-export const DEFAULT_ALERT_DAYS = 14;

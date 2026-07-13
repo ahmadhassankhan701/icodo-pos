@@ -18,7 +18,7 @@ import { TopTenList } from "../components/TopTenList.jsx";
 import { DashIcon } from "../components/DashIcon.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { branchDisplayName } from "../utils/displayLabels.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
 import { printPaperClass } from "../utils/printPaper.js";
 
@@ -44,21 +44,15 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { t, locale } = useI18n();
   const navigate = useNavigate();
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
+  const branchId = useActiveBranchId();
   const [query, setQuery] = useState("");
   const [summary, setSummary] = useState(null);
   const [byProduct, setByProduct] = useState([]);
-  const [byBranch, setByBranch] = useState([]);
   const [monthly, setMonthly] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [topCustomers, setTopCustomers] = useState([]);
   const [topServices, setTopServices] = useState([]);
   const [salesByEmployees, setSalesByEmployees] = useState([]);
-
-  useEffect(() => {
-    api("/api/branches").then(setBranches).catch(() => {});
-  }, []);
 
   useEffect(() => {
     const q = branchId ? `?branchId=${branchId}` : "";
@@ -79,15 +73,9 @@ export default function Dashboard() {
       setTopCustomers(Array.isArray(tc) ? tc : []);
       setTopServices(Array.isArray(ts) ? ts : []);
       setSalesByEmployees(Array.isArray(se) ? se : []);
-      if (user?.role === "ADMIN") {
-        const b = await api("/api/dashboard/sales-by-branch");
-        setByBranch(b);
-      } else {
-        setByBranch([]);
-      }
     };
     run().catch(() => {});
-  }, [branchId, user?.role]);
+  }, [branchId]);
 
   const cur = (v) => `${Number(v).toFixed(2)} ${t("common.currency")}`;
 
@@ -153,21 +141,6 @@ export default function Dashboard() {
           </label>
 
           <div className="dash-top-actions dashboard-print-hide">
-            {user?.role === "ADMIN" ? (
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="dash-branch"
-                aria-label={t("dashboard.allBranches")}
-              >
-                <option value="">{t("dashboard.allBranches")}</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {branchDisplayName(b, locale)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
             <button type="button" className="dash-btn-primary" onClick={printReports} title={t("dashboard.printHint")}>
               <DashIcon name="print" size={16} />
               {t("dashboard.print")}
@@ -332,24 +305,6 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </section>
 
-              {user?.role === "ADMIN" && byBranch.length ? (
-                <section className="dash-shell-card dash-chart-card">
-                  <div className="dash-chart-head">
-                    <div>
-                      <h3>{t("dashboard.chartByBranch")}</h3>
-                    </div>
-                  </div>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={byBranch}>
-                      <CartesianGrid strokeDasharray="3 8" stroke="var(--chart-grid)" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v) => [cur(v), t("dashboard.tooltipSales")]} />
-                      <Bar dataKey="value" fill="#38BDF8" radius={[10, 10, 10, 10]} maxBarSize={40} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </section>
-              ) : null}
             </div>
 
             <aside className="dash-side-col">

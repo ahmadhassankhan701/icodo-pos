@@ -34,8 +34,13 @@ router.post("/", async (req, res) => {
   if (!["ADMIN", "MANAGER", "CASHIER"].includes(String(role))) {
     return res.status(400).json({ error: "دور غير صالح" });
   }
-  if (branchId) {
-    const b = await findBranchInOrg(prisma, req.user.organizationId, branchId);
+  const roleStr = String(role);
+  const resolvedBranchId = branchId != null && String(branchId).trim() ? String(branchId).trim() : null;
+  if (roleStr !== "ADMIN" && !resolvedBranchId) {
+    return res.status(400).json({ error: "يجب تعيين فرع للمستخدم" });
+  }
+  if (resolvedBranchId) {
+    const b = await findBranchInOrg(prisma, req.user.organizationId, resolvedBranchId);
     if (!b) return res.status(400).json({ error: "فرع غير صالح" });
   }
   const hash = await bcrypt.hash(String(password), 10);
@@ -46,8 +51,8 @@ router.post("/", async (req, res) => {
       passwordHash: hash,
       name: name.trim(),
       nameEn: nameEn?.trim() || null,
-      role: String(role),
-      branchId: branchId || null,
+      role: roleStr,
+      branchId: resolvedBranchId,
     },
     select: {
       id: true,
@@ -68,7 +73,7 @@ router.patch("/:id", async (req, res) => {
     where: { id: req.params.id, organizationId: req.user.organizationId },
   });
   if (!target) return res.status(404).json({ error: "غير موجود" });
-  if (branchId) {
+  if (branchId !== undefined && branchId) {
     const b = await findBranchInOrg(prisma, req.user.organizationId, branchId);
     if (!b) return res.status(400).json({ error: "فرع غير صالح" });
   }
@@ -79,6 +84,11 @@ router.patch("/:id", async (req, res) => {
     data.role = String(role);
   }
   if (branchId !== undefined) data.branchId = branchId || null;
+  const nextRole = data.role || target.role;
+  const nextBranch = branchId !== undefined ? branchId || null : target.branchId;
+  if (nextRole !== "ADMIN" && !nextBranch) {
+    return res.status(400).json({ error: "يجب تعيين فرع للمستخدم" });
+  }
   if (password) data.passwordHash = await bcrypt.hash(String(password), 10);
 
   const user = await prisma.user.update({

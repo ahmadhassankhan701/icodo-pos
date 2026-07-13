@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { branchDisplayName } from "../utils/displayLabels.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 const inp = {
   padding: 12,
@@ -13,10 +13,9 @@ const inp = {
 };
 
 export default function Cash() {
-  const { t, locale } = useI18n();
-  const { user, isAdmin, isManager } = useAuth();
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
+  const { t } = useI18n();
+  const { user, isManager } = useAuth();
+  const branchId = useActiveBranchId();
   const [openSession, setOpenSession] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [openingFloat, setOpeningFloat] = useState("0");
@@ -25,26 +24,17 @@ export default function Cash() {
   const [msg, setMsg] = useState("");
 
   const loadOpen = useCallback(() => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return Promise.resolve();
     return api(`/api/cash-sessions/open?branchId=${bid}`).then(setOpenSession);
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   const loadList = useCallback(() => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     const p = new URLSearchParams();
     if (bid) p.set("branchId", bid);
     return api(`/api/cash-sessions?${p.toString()}`).then(setSessions);
-  }, [branchId, user?.branchId]);
-
-  useEffect(() => {
-    api("/api/branches")
-      .then((bs) => {
-        setBranches(bs);
-        if (user?.role === "ADMIN" && !branchId && bs[0]) setBranchId(bs[0].id);
-      })
-      .catch(() => {});
-  }, [user?.role]);
+  }, [branchId]);
 
   useEffect(() => {
     loadOpen().catch(() => setOpenSession(null));
@@ -54,7 +44,7 @@ export default function Cash() {
   const openShift = async (e) => {
     e.preventDefault();
     setMsg("");
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     try {
       await api("/api/cash-sessions/open", {
@@ -92,25 +82,10 @@ export default function Cash() {
     }
   };
 
-  const bid = branchId || user?.branchId;
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ margin: 0 }}>{t("cash.title")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("cash.intro")}</p>
-
-      {isAdmin ? (
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 360 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-          <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={{ ...inp, minHeight: 44 }}>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {branchDisplayName(b, locale)}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
 
       <div className="card">
         <strong>{t("cash.status")}</strong>
@@ -187,7 +162,6 @@ export default function Cash() {
           <thead>
             <tr style={{ color: "var(--muted)", textAlign: "start" }}>
               <th style={th}>{t("returns.colDate")}</th>
-              <th style={th}>{t("cash.branch")}</th>
               <th style={th}>{t("cash.openingFloat")}</th>
               <th style={th}>{t("cash.expected")}</th>
               <th style={th}>{t("cash.countedCash")}</th>
@@ -206,7 +180,6 @@ export default function Cash() {
                     </>
                   ) : null}
                 </td>
-                <td style={td}>{s.branch?.name || bid}</td>
                 <td style={td}>{Number(s.openingFloat).toFixed(2)}</td>
                 <td style={td}>{s.expectedCash != null ? Number(s.expectedCash).toFixed(2) : "—"}</td>
                 <td style={td}>{s.closingCountedCash != null ? Number(s.closingCountedCash).toFixed(2) : "—"}</td>

@@ -4,8 +4,8 @@ import { getMessage } from "../i18n/translations.js";
 const STORAGE_KEY = "petstore-lang";
 
 const TITLES = {
-  ar: "نظام متجر الحيوانات الأليفة — POS",
-  en: "Pet Store — POS",
+  ar: "Icodo - POS",
+  en: "Icodo - POS",
 };
 
 function readLocale() {

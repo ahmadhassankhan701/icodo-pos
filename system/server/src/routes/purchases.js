@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { findBranchInOrg } from "../lib/orgScope.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 
@@ -273,7 +273,7 @@ router.get("/", async (req, res) => {
   res.json(rows);
 });
 
-router.get("/reorder-recommendations", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.get("/reorder-recommendations", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("purchases"), async (req, res) => {
   const branchId = String(req.query.branchId || req.user.branchId || "");
   if (!branchId) return res.status(400).json({ error: "يجب اختيار الفرع" });
   if (
@@ -312,7 +312,7 @@ router.get("/reorder-recommendations", requireRole("ADMIN", "MANAGER"), async (r
   });
 });
 
-router.post("/reorder-recommendations/receive", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/reorder-recommendations/receive", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("purchases"), async (req, res) => {
   const branchId = String(req.body?.branchId || req.user.branchId || "");
   if (!branchId) return res.status(400).json({ error: "يجب اختيار الفرع" });
   if (
@@ -385,7 +385,7 @@ router.post("/reorder-recommendations/receive", requireRole("ADMIN", "MANAGER"),
   });
 });
 
-router.post("/receive", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/receive", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("purchases"), async (req, res) => {
   return receivePurchase(req, res, req.body || {});
 });
 

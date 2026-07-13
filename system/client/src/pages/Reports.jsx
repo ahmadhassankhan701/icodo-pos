@@ -16,7 +16,7 @@ import {
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { branchDisplayName } from "../utils/displayLabels.js";
+import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 function toYMD(d) {
   const x = new Date(d);
@@ -43,8 +43,7 @@ export default function Reports() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const [tab, setTab] = useState("charts");
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
+  const branchId = useActiveBranchId();
   const [from, setFrom] = useState(() => toYMD(startOfMonthDate()));
   const [to, setTo] = useState(() => toYMD(new Date()));
   const [groupBy, setGroupBy] = useState("day");
@@ -60,10 +59,6 @@ export default function Reports() {
     expenseDate: toYMD(new Date()),
   });
 
-  useEffect(() => {
-    api("/api/branches").then(setBranches).catch(() => {});
-  }, []);
-
   const loadAnalytics = useCallback(async () => {
     setLoading(true);
     setMsg("");
@@ -72,7 +67,7 @@ export default function Reports() {
       q.set("from", new Date(from + "T00:00:00").toISOString());
       q.set("to", new Date(to + "T23:59:59").toISOString());
       q.set("groupBy", groupBy);
-      if (user?.role === "ADMIN" && branchId) q.set("branchId", branchId);
+      if (branchId) q.set("branchId", branchId);
       const a = await api(`/api/reports/analytics?${q.toString()}`);
       setAnalytics(a);
     } catch (e) {
@@ -81,7 +76,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, groupBy, branchId, user?.role, t]);
+  }, [from, to, groupBy, branchId, t]);
 
   const loadExpenses = useCallback(async () => {
     try {
@@ -206,23 +201,6 @@ export default function Reports() {
             <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("reports.to")}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ minHeight: 44, padding: "0 10px" }} />
           </label>
-          {user?.role === "ADMIN" ? (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("reports.branch")}</span>
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                style={{ minHeight: 44, minWidth: 200, padding: "8px 12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }}
-              >
-                <option value="">{t("reports.allBranches")}</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {branchDisplayName(b, locale)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("reports.groupBy")}</span>
             <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)} style={{ minHeight: 44, padding: "8px 12px" }}>

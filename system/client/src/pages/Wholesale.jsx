@@ -13,6 +13,7 @@ import {
 import { useBarcodeScanner } from "../hooks/useBarcodeScanner.js";
 import { useWholesaleCartStore } from "../store/wholesaleCartStore.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useActiveBranchId, useActiveBranchLabel } from "../context/BranchContext.jsx";
 import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
@@ -27,7 +28,6 @@ import {
 import { getOrCreateDeviceId, SYNC_TYPES } from "../offline/db.js";
 import { enqueue } from "../offline/syncQueue.js";
 import { buildOfflineSalePreview } from "../offline/offlineSale.js";
-import { branchDisplayName } from "../utils/displayLabels.js";
 import { buildReceiptPlainText } from "../utils/receiptText.js";
 import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
 
@@ -40,8 +40,8 @@ export default function Wholesale() {
   const { user } = useAuth();
   const { refreshPending } = useOffline();
   const { t, locale } = useI18n();
-  const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(user?.branchId || "");
+  const branchId = useActiveBranchId();
+  const branchName = useActiveBranchLabel(locale);
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [petFilter, setPetFilter] = useState("");
@@ -122,23 +122,11 @@ export default function Wholesale() {
   }, []);
 
   useEffect(() => {
-    api("/api/branches")
-      .then((bs) => {
-        setBranches(bs);
-        if (user?.role === "ADMIN" && !branchId && bs[0]) {
-          setBranchId(bs[0].id);
-        }
-      })
-      .catch(() => {});
-  }, [user?.role]);
-
-  useEffect(() => {
-    const bid = branchId || user?.branchId;
-    if (bid) setBranchCart(bid);
-  }, [branchId, user?.branchId, setBranchCart]);
+    if (branchId) setBranchCart(branchId);
+  }, [branchId, setBranchCart]);
 
   const loadProducts = useCallback(async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     const q = new URLSearchParams();
     if (bid) q.set("branchId", bid);
     if (search) q.set("search", search);
@@ -171,10 +159,10 @@ export default function Wholesale() {
       const list = await loadProductsForBranch(bid);
       setProducts(list);
     }
-  }, [branchId, user?.branchId, search, petFilter]);
+  }, [branchId, search, petFilter]);
 
   const loadHeldCarts = useCallback(async () => {
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) {
       setHeldList([]);
       return;
@@ -187,7 +175,7 @@ export default function Wholesale() {
     } catch {
       setHeldList([]);
     }
-  }, [branchId, user?.branchId]);
+  }, [branchId]);
 
   useEffect(() => {
     loadProducts().catch(() => setProducts([]));
@@ -244,12 +232,6 @@ export default function Wholesale() {
 
   useBarcodeScanner(onScan, true);
 
-  const branchName = useMemo(() => {
-    const bid = branchId || user?.branchId;
-    const b = branches.find((br) => br.id === bid);
-    return branchDisplayName(b, locale);
-  }, [branches, branchId, user?.branchId, locale]);
-
   const fillRemainder = (idx) => {
     const due = amountDue;
     const others = splitRows.reduce((s, r, j) => {
@@ -270,7 +252,7 @@ export default function Wholesale() {
       setMsg(t("pos.holdNeedItems"));
       return;
     }
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
     if (!bid) return;
     setLoading(true);
     try {
@@ -338,7 +320,7 @@ export default function Wholesale() {
   const checkout = async () => {
     setMsg("");
     if (!items.length) return;
-    const bid = branchId || user?.branchId;
+    const bid = branchId;
 
     let paymentSplits = undefined;
     if (splitEnabled) {
@@ -476,32 +458,6 @@ export default function Wholesale() {
     <div className="pos-page-root wholesale-page-root">
       <div className="pos-top-bar">
         <h1 className="pos-top-bar__title">{t("wholesale.title")}</h1>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("pos.branch")}</span>
-          <select
-            value={branchId || user?.branchId || ""}
-            onChange={(e) => {
-              setBranchId(e.target.value);
-              clearCart();
-            }}
-            disabled={user?.role !== "ADMIN" && Boolean(user?.branchId)}
-            style={{
-              minHeight: 44,
-              minWidth: 180,
-              padding: "8px 12px",
-              borderRadius: 12,
-              background: "var(--surface)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {branchDisplayName(b, locale)}
-              </option>
-            ))}
-          </select>
-        </label>
         <input
           placeholder={t("pos.searchPlaceholder")}
           value={search}

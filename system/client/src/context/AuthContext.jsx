@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { api, getToken } from "../api/client.js";
 import { decodeJwtPayload, minimalUserFromTokenPayload } from "../lib/jwtDecode.js";
 import {
@@ -6,6 +6,7 @@ import {
   setCachedSessionUser,
 } from "../lib/sessionUserCache.js";
 import { clearStoredSyncApiKey } from "../lib/syncApiKeySession.js";
+import { resolveClientPermissions } from "../lib/permissions.js";
 
 const AuthContext = createContext(null);
 
@@ -107,18 +108,33 @@ export function AuthProvider({ children }) {
     clearStoredSyncApiKey();
   };
 
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) return null;
+    const u = await api("/api/auth/me");
+    setUser(u);
+    setCachedSessionUser(u);
+    return u;
+  }, []);
+
   const value = useMemo(
-    () => ({
-      user,
-      loading,
-      login,
-      registerOrganization,
-      logout,
-      isAdmin: user?.role === "ADMIN",
-      isManager: user?.role === "MANAGER" || user?.role === "ADMIN",
-      isPlatformAdmin: Boolean(user?.isPlatformAdmin),
-    }),
-    [user, loading]
+    () => {
+      const permissions = resolveClientPermissions(user);
+      return {
+        user,
+        loading,
+        login,
+        registerOrganization,
+        logout,
+        refreshUser,
+        isAdmin: user?.role === "ADMIN",
+        isSuperAdmin: user?.role === "ADMIN",
+        isManager: user?.role === "MANAGER" || user?.role === "ADMIN",
+        isPlatformAdmin: Boolean(user?.isPlatformAdmin),
+        permissions,
+        can: (key) => Boolean(permissions?.[key]),
+      };
+    },
+    [user, loading, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

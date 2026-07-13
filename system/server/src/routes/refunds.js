@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { findBranchInOrg } from "../lib/orgScope.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 
@@ -35,7 +35,7 @@ const refundInclude = {
   user: { select: { name: true } },
 };
 
-router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("refunds"), async (req, res) => {
   const {
     branchId,
     saleId,
