@@ -2,28 +2,44 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
 import { findBranchInOrg } from "../lib/orgScope.js";
+import { findOrganizationOwnerId, isOrganizationOwner } from "../lib/orgOwner.js";
 import { authMiddleware, requireRole } from "../middleware/auth.js";
 
 const router = Router();
 router.use(authMiddleware);
 router.use(requireRole("ADMIN"));
 
+const userSelect = {
+  id: true,
+  email: true,
+  name: true,
+  nameEn: true,
+  role: true,
+  branchId: true,
+  branch: { select: { name: true, nameEn: true } },
+  createdAt: true,
+};
+
 router.get("/", async (req, res) => {
-  const users = await prisma.user.findMany({
-    where: { organizationId: req.user.organizationId },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      nameEn: true,
-      role: true,
-      branchId: true,
-      branch: { select: { name: true, nameEn: true } },
-      createdAt: true,
-    },
+  const orgId = req.user.organizationId;
+  const [users, ownerId] = await Promise.all([
+    prisma.user.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: "asc" },
+      select: userSelect,
+    }),
+    findOrganizationOwnerId(prisma, orgId),
+  ]);
+  const maxUsers = 10;
+  res.json({
+    users: users.map((u) => ({
+      ...u,
+      isOrgOwner: u.id === ownerId,
+    })),
+    maxUsers,
+    userCount: users.length,
+    ownerId,
   });
-  res.json(users);
 });
 
 router.post("/", async (req, res) => {
@@ -43,6 +59,22 @@ router.post("/", async (req, res) => {
     const b = await findBranchInOrg(prisma, req.user.organizationId, resolvedBranchId);
     if (!b) return res.status(400).json({ error: "فرع غير صالح" });
   }
+
+  const org = await prisma.organization.findUnique({
+    where: { id: req.user.organizationId },
+    select: { id: true },
+  });
+  if (!org) return res.status(400).json({ error: "مؤسسة غير صالحة" });
+  const maxUsers = 10;
+  const userCount = await prisma.user.count({ where: { organizationId: req.user.organizationId } });
+  if (userCount >= maxUsers) {
+    return res.status(403).json({
+      error: `تم بلوغ الحد الأقصى للمستخدمين (${maxUsers})`,
+      code: "USER_LIMIT",
+      maxUsers,
+    });
+  }
+
   const hash = await bcrypt.hash(String(password), 10);
   const user = await prisma.user.create({
     data: {
@@ -54,17 +86,10 @@ router.post("/", async (req, res) => {
       role: roleStr,
       branchId: resolvedBranchId,
     },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      nameEn: true,
-      role: true,
-      branchId: true,
-      branch: { select: { name: true, nameEn: true } },
-    },
+    select: userSelect,
   });
-  res.status(201).json(user);
+  const ownerId = await findOrganizationOwnerId(prisma, req.user.organizationId);
+  res.status(201).json({ ...user, isOrgOwner: user.id === ownerId });
 });
 
 router.patch("/:id", async (req, res) => {
@@ -73,6 +98,14 @@ router.patch("/:id", async (req, res) => {
     where: { id: req.params.id, organizationId: req.user.organizationId },
   });
   if (!target) return res.status(404).json({ error: "غير موجود" });
+
+  if (await isOrganizationOwner(prisma, req.user.organizationId, target.id)) {
+    return res.status(403).json({
+      error: "لا يمكن تعديل حساب مالك المؤسسة (المشرف الأعلى)",
+      code: "ORG_OWNER_LOCKED",
+    });
+  }
+
   if (branchId !== undefined && branchId) {
     const b = await findBranchInOrg(prisma, req.user.organizationId, branchId);
     if (!b) return res.status(400).json({ error: "فرع غير صالح" });
@@ -94,27 +127,27 @@ router.patch("/:id", async (req, res) => {
   const user = await prisma.user.update({
     where: { id: target.id },
     data,
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      nameEn: true,
-      role: true,
-      branchId: true,
-      branch: { select: { name: true, nameEn: true } },
-    },
+    select: userSelect,
   });
-  res.json(user);
+  res.json({ ...user, isOrgOwner: false });
 });
 
 router.delete("/:id", async (req, res) => {
-  if (req.params.id === req.user.sub) {
-    return res.status(400).json({ error: "لا يمكن حذف حسابك الحالي" });
-  }
   const target = await prisma.user.findFirst({
     where: { id: req.params.id, organizationId: req.user.organizationId },
   });
   if (!target) return res.status(404).json({ error: "غير موجود" });
+
+  if (await isOrganizationOwner(prisma, req.user.organizationId, target.id)) {
+    return res.status(403).json({
+      error: "لا يمكن حذف حساب مالك المؤسسة (المشرف الأعلى)",
+      code: "ORG_OWNER_LOCKED",
+    });
+  }
+  if (req.params.id === req.user.sub) {
+    return res.status(400).json({ error: "لا يمكن حذف حسابك الحالي" });
+  }
+
   await prisma.user.delete({ where: { id: target.id } });
   res.status(204).send();
 });

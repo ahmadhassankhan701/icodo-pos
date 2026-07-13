@@ -89,4 +89,54 @@ router.patch("/:id", requireRole("ADMIN"), async (req, res) => {
   res.json(b);
 });
 
+router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
+  const orgId = req.user.organizationId;
+  const existing = await prisma.branch.findFirst({
+    where: { id: req.params.id, organizationId: orgId },
+  });
+  if (!existing) return res.status(404).json({ error: "الفرع غير موجود" });
+
+  const branchCount = await prisma.branch.count({ where: { organizationId: orgId } });
+  if (branchCount <= 1) {
+    return res.status(400).json({
+      error: "لا يمكن حذف الفرع الوحيد في المؤسسة",
+      code: "LAST_BRANCH",
+    });
+  }
+
+  const [sales, users, cashSessions, refunds, purchases] = await Promise.all([
+    prisma.sale.count({ where: { branchId: existing.id } }),
+    prisma.user.count({ where: { branchId: existing.id } }),
+    prisma.cashSession.count({ where: { branchId: existing.id } }),
+    prisma.refund.count({ where: { branchId: existing.id } }),
+    prisma.purchase.count({ where: { branchId: existing.id } }),
+  ]);
+
+  const blockers = [];
+  if (sales) blockers.push(`${sales} مبيعات`);
+  if (users) blockers.push(`${users} مستخدمين مرتبطين`);
+  if (cashSessions) blockers.push(`${cashSessions} جلسات صندوق`);
+  if (refunds) blockers.push(`${refunds} مرتجعات`);
+  if (purchases) blockers.push(`${purchases} مشتريات`);
+
+  if (blockers.length) {
+    return res.status(400).json({
+      error: `لا يمكن حذف الفرع لوجود بيانات مرتبطة: ${blockers.join("، ")}. انقل المستخدمين أو اختر فرعاً بلا معاملات.`,
+      code: "BRANCH_HAS_DATA",
+      blockers: { sales, users, cashSessions, refunds, purchases },
+    });
+  }
+
+  await prisma.branch.delete({ where: { id: existing.id } });
+  await writeAudit({
+    userId: req.user.sub,
+    action: "BRANCH_DELETE",
+    entityType: "Branch",
+    entityId: existing.id,
+    summary: `Deleted branch "${existing.name}"`,
+    meta: { name: existing.name },
+  });
+  res.status(204).send();
+});
+
 export default router;

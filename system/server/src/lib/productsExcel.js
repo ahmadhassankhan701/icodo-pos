@@ -82,3 +82,42 @@ export function parseNumber(v) {
   const n = Number(String(v).replace(/,/g, ".").replace(/\s/g, ""));
   return Number.isFinite(n) ? n : null;
 }
+
+/**
+ * Normalize sheet rows for import preview / confirm.
+ * Skips blank name+nameEn rows. Preserves Excel field names used by the importer.
+ */
+export function normalizeImportPreviewRows(rawRows) {
+  const out = [];
+  for (let i = 0; i < rawRows.length; i++) {
+    const r = rawRows[i] || {};
+    const name = String(r.name ?? "").trim();
+    const nameEn = String(r.nameEn ?? "").trim();
+    if (!name && !nameEn) continue;
+    const priceNum = parseNumber(r.price);
+    const rowNum = i + 2;
+    out.push({
+      key: `excel-${rowNum}-${out.length}`,
+      rowNum,
+      id: r.id != null && String(r.id).trim() ? String(r.id).trim() : "",
+      name: name || nameEn,
+      nameEn,
+      sku: r.sku != null && String(r.sku).trim() ? String(r.sku).trim() : "",
+      barcode: r.barcode != null && String(r.barcode).trim() ? String(r.barcode).trim() : "",
+      category: r.category != null ? String(r.category).trim() : "",
+      subcategory: r.subcategory != null ? String(r.subcategory).trim() : "",
+      cost: r.cost ?? "",
+      price: r.price ?? "",
+      wholesalePrice: r.wholesalePrice ?? "",
+      imageUrl: r.imageUrl != null ? String(r.imageUrl).trim() : "",
+      isActive: r.isActive ?? "yes",
+      stockQty: r.stockQty ?? "",
+      minStock: r.minStock ?? "",
+      expiryDate: r.expiryDate ?? "",
+      description: r.description != null ? String(r.description).trim() : "",
+      petType: r.petType ?? "OTHER",
+      invalidPrice: priceNum === null || priceNum < 0,
+    });
+  }
+  return out;
+}

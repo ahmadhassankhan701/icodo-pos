@@ -35,6 +35,96 @@ router.get("/", async (req, res) => {
   res.json(rows);
 });
 
+/** All cash / payment transactions (sales + receivable collections) */
+router.get("/transactions", async (req, res) => {
+  const orgId = req.user.organizationId;
+  const branchId =
+    req.query.branchId != null && String(req.query.branchId).trim()
+      ? String(req.query.branchId).trim()
+      : null;
+  if (branchId) {
+    const br = await findBranchInOrg(prisma, orgId, branchId);
+    if (!br) return res.status(400).json({ error: "فرع غير صالح" });
+  }
+  const limit = Math.min(300, Math.max(1, parseInt(String(req.query.limit || "150"), 10) || 150));
+
+  const [sales, collections] = await Promise.all([
+    prisma.sale.findMany({
+      where: {
+        branch: { organizationId: orgId },
+        ...(branchId ? { branchId } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        createdAt: true,
+        total: true,
+        amountPaid: true,
+        amountDue: true,
+        paymentMethod: true,
+        paymentSplits: true,
+        invoiceNumber: true,
+        customer: { select: { id: true, name: true } },
+        user: { select: { id: true, name: true } },
+        branch: { select: { id: true, name: true, nameEn: true } },
+      },
+    }),
+    prisma.customerAccountLedger.findMany({
+      where: {
+        organizationId: orgId,
+        entryType: "PAYMENT",
+        ...(branchId ? { branchId } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: {
+        customer: { select: { id: true, name: true } },
+        branch: { select: { id: true, name: true, nameEn: true } },
+        createdBy: { select: { id: true, name: true } },
+        sale: { select: { id: true, invoiceNumber: true } },
+      },
+    }),
+  ]);
+
+  const rows = [
+    ...sales.map((s) => ({
+      id: `sale:${s.id}`,
+      kind: "SALE",
+      createdAt: s.createdAt,
+      amount: Number(s.amountPaid ?? s.total ?? 0),
+      total: Number(s.total ?? 0),
+      amountDue: Number(s.amountDue ?? 0),
+      paymentMethod: s.paymentMethod,
+      paymentSplits: s.paymentSplits,
+      invoiceNumber: s.invoiceNumber || null,
+      customer: s.customer,
+      user: s.user,
+      branch: s.branch,
+      note: null,
+    })),
+    ...collections.map((c) => ({
+      id: `collect:${c.id}`,
+      kind: "COLLECTION",
+      createdAt: c.createdAt,
+      amount: Math.abs(Number(c.amount ?? 0)),
+      total: Math.abs(Number(c.amount ?? 0)),
+      amountDue: null,
+      paymentMethod: c.paymentMethod || "CASH",
+      paymentSplits: null,
+      invoiceNumber: c.sale?.invoiceNumber || null,
+      customer: c.customer,
+      user: c.createdBy,
+      branch: c.branch,
+      note: c.note || null,
+    })),
+  ]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, limit);
+
+  res.json(rows);
+});
+
 /** كشف حساب ذمّة */
 router.get("/:customerId/ledger", async (req, res) => {
   const orgId = req.user.organizationId;

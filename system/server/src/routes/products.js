@@ -7,6 +7,7 @@ import { findBranchInOrg } from "../lib/orgScope.js";
 import {
   buildProductsExcelBuffer,
   readFirstSheetRows,
+  normalizeImportPreviewRows,
   parseYesNo,
   parsePetType,
   parseNumber,
@@ -176,6 +177,142 @@ async function resolveCatalogFromExcel(orgId, { categoryName, subcategoryName, s
   return { categoryId, subcategoryId, sku: resolvedSku, category: categoryLabel };
 }
 
+/** Shared Excel / confirmed-row product upsert + inventory sync. */
+async function runProductImportFromRows({ orgId, branchId, rows }) {
+  const errors = [];
+  let created = 0;
+  let updated = 0;
+  const touchedProductIds = new Set();
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || {};
+    const rowNum = Number(r.rowNum) > 0 ? Number(r.rowNum) : i + 2;
+    const name = String(r.name ?? "").trim();
+    if (!name) continue;
+
+    const priceNum = parseNumber(r.price);
+    if (priceNum === null || priceNum < 0) {
+      errors.push({ row: rowNum, message: "سعر غير صالح" });
+      continue;
+    }
+
+    const costRaw = parseNumber(r.cost);
+    const wholesaleRaw = parseNumber(r.wholesalePrice);
+    const sku = r.sku != null && String(r.sku).trim() ? String(r.sku).trim() : null;
+    const barcode = r.barcode != null && String(r.barcode).trim() ? String(r.barcode).trim() : null;
+    const petType = parsePetType(r.petType);
+    const isActive = parseYesNo(r.isActive);
+    const stockQty = Math.max(0, Math.floor(parseNumber(r.stockQty) ?? 0));
+    const minStock = Math.max(0, Math.floor(parseNumber(r.minStock) ?? 5));
+    const expDate = parseExpiryCell(r.expiryDate);
+
+    const catalog = await resolveCatalogFromExcel(orgId, {
+      categoryName: r.category,
+      subcategoryName: r.subcategory,
+      sku,
+    });
+
+    const baseData = {
+      name,
+      nameEn: r.nameEn != null && String(r.nameEn).trim() ? String(r.nameEn).trim() : null,
+      description:
+        r.description != null && String(r.description).trim()
+          ? String(r.description).trim()
+          : null,
+      sku: catalog.sku,
+      barcode,
+      price: new Prisma.Decimal(priceNum),
+      wholesalePrice:
+        wholesaleRaw != null && wholesaleRaw >= 0 ? new Prisma.Decimal(wholesaleRaw) : null,
+      cost: costRaw != null && costRaw >= 0 ? new Prisma.Decimal(costRaw) : null,
+      petType,
+      category: catalog.category,
+      categoryId: catalog.categoryId,
+      subcategoryId: catalog.subcategoryId,
+      imageUrl: r.imageUrl != null && String(r.imageUrl).trim() ? String(r.imageUrl).trim() : null,
+      isActive,
+      expiryDate: expDate,
+      expiryAlertDaysBefore: null,
+    };
+
+    let existing = null;
+    const idStr = r.id != null && String(r.id).trim() ? String(r.id).trim() : null;
+    if (idStr) {
+      existing = await prisma.product.findFirst({
+        where: { id: idStr, organizationId: orgId },
+      });
+    }
+    if (!existing && barcode) {
+      existing = await prisma.product.findFirst({
+        where: { organizationId: orgId, barcode },
+      });
+    }
+    if (!existing && sku) {
+      existing = await prisma.product.findFirst({
+        where: { organizationId: orgId, sku },
+      });
+    }
+
+    try {
+      if (baseData.barcode) {
+        await assertBarcodeAvailable(prisma, orgId, baseData.barcode, existing?.id ?? null);
+      }
+    } catch (e) {
+      errors.push({
+        row: rowNum,
+        message: e?.message || "باركود مكرر",
+      });
+      continue;
+    }
+
+    let productId;
+    try {
+      if (existing) {
+        const p = await prisma.product.update({
+          where: { id: existing.id },
+          data: baseData,
+        });
+        productId = p.id;
+        updated += 1;
+      } else {
+        const p = await prisma.product.create({
+          data: {
+            organizationId: orgId,
+            ...baseData,
+          },
+        });
+        productId = p.id;
+        created += 1;
+      }
+
+      await prisma.inventory.upsert({
+        where: {
+          productId_branchId: { productId, branchId },
+        },
+        create: {
+          productId,
+          branchId,
+          quantity: stockQty,
+          minStockLevel: minStock,
+        },
+        update: {
+          quantity: stockQty,
+          minStockLevel: minStock,
+        },
+      });
+      touchedProductIds.add(productId);
+    } catch (e) {
+      if (e?.code === "P2002") {
+        errors.push({ row: rowNum, message: "تعارض SKU أو بيانات فريدة" });
+      } else {
+        errors.push({ row: rowNum, message: e?.message || "خطأ حفظ" });
+      }
+    }
+  }
+
+  return { created, updated, errors, touchedProductIds };
+}
+
 const isSqlite = () => {
   const u = process.env.DATABASE_URL || "";
   return u.startsWith("file:") || u.includes("sqlite");
@@ -309,6 +446,98 @@ router.get("/export/excel", requireRole("ADMIN", "MANAGER"), async (req, res, ne
 });
 
 router.post(
+  "/import/excel/preview",
+  requireRole("ADMIN", "MANAGER"),
+  (req, res, next) => {
+    uploadExcel.single("file")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || "رفع الملف فشل" });
+      next();
+    });
+  },
+  async (req, res, next) => {
+    try {
+      if (!req.file?.buffer) {
+        return res.status(400).json({ error: "لم يُرفع ملف" });
+      }
+      let rawRows;
+      try {
+        rawRows = readFirstSheetRows(req.file.buffer);
+      } catch (e) {
+        return res.status(400).json({ error: e?.message || "تعذر قراءة الملف" });
+      }
+      const rows = normalizeImportPreviewRows(rawRows);
+      if (!rows.length) {
+        return res.status(400).json({ error: "لا توجد منتجات في الملف" });
+      }
+      res.json({ ok: true, rows, count: rows.length });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+router.post("/import/excel/confirm", requireRole("ADMIN", "MANAGER"), async (req, res, next) => {
+  try {
+    const orgId = req.user.organizationId;
+    const branchId =
+      req.query.branchId != null && String(req.query.branchId).trim()
+        ? String(req.query.branchId).trim()
+        : req.body?.branchId != null && String(req.body.branchId).trim()
+          ? String(req.body.branchId).trim()
+          : null;
+    if (!branchId) {
+      return res.status(400).json({ error: "حدّد فرعاً (branchId) لتطبيق المخزون" });
+    }
+    const br = await findBranchInOrg(prisma, orgId, branchId);
+    if (!br) return res.status(400).json({ error: "فرع غير صالح" });
+
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!rows?.length) {
+      return res.status(400).json({ error: "لا توجد منتجات للاستيراد" });
+    }
+    if (rows.length > 2000) {
+      return res.status(400).json({ error: "الحد الأقصى 2000 منتج في العملية" });
+    }
+
+    const { created, updated, errors, touchedProductIds } = await runProductImportFromRows({
+      orgId,
+      branchId,
+      rows,
+    });
+
+    if (touchedProductIds.size > 0) {
+      scheduleInventoryWebhook(orgId, {
+        event: "products.import",
+        meta: { branchId, created, updated },
+        lines: [...touchedProductIds].map((productId) => ({
+          branchId,
+          productId,
+          quantityDelta: 0,
+        })),
+      });
+    }
+
+    await writeAudit({
+      userId: req.user.sub,
+      action: "PRODUCT_IMPORT",
+      entityType: "Product",
+      branchId,
+      summary: `Excel import confirm: ${created} created, ${updated} updated, ${errors.length} errors`,
+      meta: {
+        created,
+        updated,
+        errorCount: errors.length,
+        productIds: [...touchedProductIds].slice(0, 50),
+      },
+    });
+
+    res.json({ ok: true, created, updated, errors, errorCount: errors.length });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post(
   "/import/excel",
   requireRole("ADMIN", "MANAGER"),
   (req, res, next) => {
@@ -333,144 +562,19 @@ router.post(
         return res.status(400).json({ error: "لم يُرفع ملف" });
       }
 
-      let rows;
+      let rawRows;
       try {
-        rows = readFirstSheetRows(req.file.buffer);
+        rawRows = readFirstSheetRows(req.file.buffer);
       } catch (e) {
         return res.status(400).json({ error: e?.message || "تعذر قراءة الملف" });
       }
 
-      const errors = [];
-      let created = 0;
-      let updated = 0;
-      const touchedProductIds = new Set();
-
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const rowNum = i + 2;
-        const name = String(r.name ?? "").trim();
-        if (!name) continue;
-
-        const priceNum = parseNumber(r.price);
-        if (priceNum === null || priceNum < 0) {
-          errors.push({ row: rowNum, message: "سعر غير صالح" });
-          continue;
-        }
-
-        const costRaw = parseNumber(r.cost);
-        const wholesaleRaw = parseNumber(r.wholesalePrice);
-        const sku = r.sku != null && String(r.sku).trim() ? String(r.sku).trim() : null;
-        const barcode = r.barcode != null && String(r.barcode).trim() ? String(r.barcode).trim() : null;
-        const petType = parsePetType(r.petType);
-        const isActive = parseYesNo(r.isActive);
-        const stockQty = Math.max(0, Math.floor(parseNumber(r.stockQty) ?? 0));
-        const minStock = Math.max(0, Math.floor(parseNumber(r.minStock) ?? 5));
-        const expDate = parseExpiryCell(r.expiryDate);
-
-        const catalog = await resolveCatalogFromExcel(orgId, {
-          categoryName: r.category,
-          subcategoryName: r.subcategory,
-          sku,
-        });
-
-        const baseData = {
-          name,
-          nameEn: r.nameEn != null && String(r.nameEn).trim() ? String(r.nameEn).trim() : null,
-          description:
-            r.description != null && String(r.description).trim()
-              ? String(r.description).trim()
-              : null,
-          sku: catalog.sku,
-          barcode,
-          price: new Prisma.Decimal(priceNum),
-          wholesalePrice:
-            wholesaleRaw != null && wholesaleRaw >= 0 ? new Prisma.Decimal(wholesaleRaw) : null,
-          cost:
-            costRaw != null && costRaw >= 0 ? new Prisma.Decimal(costRaw) : null,
-          petType,
-          category: catalog.category,
-          categoryId: catalog.categoryId,
-          subcategoryId: catalog.subcategoryId,
-          imageUrl: r.imageUrl != null && String(r.imageUrl).trim() ? String(r.imageUrl).trim() : null,
-          isActive,
-          expiryDate: expDate,
-          expiryAlertDaysBefore: null,
-        };
-
-        let existing = null;
-        const idStr = r.id != null && String(r.id).trim() ? String(r.id).trim() : null;
-        if (idStr) {
-          existing = await prisma.product.findFirst({
-            where: { id: idStr, organizationId: orgId },
-          });
-        }
-        if (!existing && barcode) {
-          existing = await prisma.product.findFirst({
-            where: { organizationId: orgId, barcode },
-          });
-        }
-        if (!existing && sku) {
-          existing = await prisma.product.findFirst({
-            where: { organizationId: orgId, sku },
-          });
-        }
-
-        try {
-          if (baseData.barcode) {
-            await assertBarcodeAvailable(prisma, orgId, baseData.barcode, existing?.id ?? null);
-          }
-        } catch (e) {
-          errors.push({
-            row: rowNum,
-            message: e?.message || "باركود مكرر",
-          });
-          continue;
-        }
-
-        let productId;
-        try {
-          if (existing) {
-            const p = await prisma.product.update({
-              where: { id: existing.id },
-              data: baseData,
-            });
-            productId = p.id;
-            updated += 1;
-          } else {
-            const p = await prisma.product.create({
-              data: {
-                organizationId: orgId,
-                ...baseData,
-              },
-            });
-            productId = p.id;
-            created += 1;
-          }
-
-          await prisma.inventory.upsert({
-            where: {
-              productId_branchId: { productId, branchId },
-            },
-            create: {
-              productId,
-              branchId,
-              quantity: stockQty,
-              minStockLevel: minStock,
-            },
-            update: {
-              quantity: stockQty,
-              minStockLevel: minStock,
-            },
-          });
-          touchedProductIds.add(productId);
-        } catch (e) {
-          if (e?.code === "P2002") {
-            errors.push({ row: rowNum, message: "تعارض SKU أو بيانات فريدة" });
-          } else {
-            errors.push({ row: rowNum, message: e?.message || "خطأ حفظ" });
-          }
-        }
-      }
+      const rows = normalizeImportPreviewRows(rawRows);
+      const { created, updated, errors, touchedProductIds } = await runProductImportFromRows({
+        orgId,
+        branchId,
+        rows,
+      });
 
       if (touchedProductIds.size > 0) {
         scheduleInventoryWebhook(orgId, {
