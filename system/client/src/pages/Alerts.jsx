@@ -143,6 +143,12 @@ export default function Alerts() {
       if (it.payload?.status === "expired") {
         return t("alerts.title.expiryExpired", { name: name || "—" });
       }
+      if (it.payload?.status === "soon") {
+        return t("alerts.title.expirySoon", {
+          name: name || "—",
+          days: String(it.payload?.daysUntilExpiry ?? ""),
+        });
+      }
       return t("alerts.title.expiryToday", { name: name || "—" });
     }
     if (it.type === "CASH_NO_SESSION") {
@@ -227,7 +233,7 @@ export default function Alerts() {
   const unreadCount = merged.filter((x) => !x.read).length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 960, width: "100%", marginInline: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
       <h1 style={{ margin: 0 }}>{t("alerts.pageTitle")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("alerts.intro")}</p>
 

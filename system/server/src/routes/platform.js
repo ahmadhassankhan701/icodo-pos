@@ -27,6 +27,8 @@ router.get("/organizations", async (_req, res, next) => {
         name: true,
         slug: true,
         businessVertical: true,
+        plan: true,
+        maxBranches: true,
         createdAt: true,
         _count: { select: { users: true, branches: true } },
       },
@@ -157,6 +159,95 @@ router.patch("/organizations/:id", async (req, res, next) => {
       return res.status(409).json({ error: "تعارض في البيانات" });
     }
     next(e);
+  }
+});
+
+router.post("/organizations/:id/plan-purchases", async (req, res, next) => {
+  try {
+    const { plan, maxBranches, amount, currency, reference, note, purchasedAt } =
+      req.body || {};
+    const planValue = String(plan || "")
+      .trim()
+      .toUpperCase();
+    if (!["FREE", "PREMIUM"].includes(planValue)) {
+      return res.status(400).json({ error: "Invalid plan", code: "INVALID_PLAN" });
+    }
+
+    const branchLimit = Number(maxBranches);
+    if (!Number.isInteger(branchLimit) || branchLimit < 1 || branchLimit > 1000) {
+      return res.status(400).json({ error: "Invalid branch limit", code: "INVALID_BRANCH_LIMIT" });
+    }
+
+    const amountValue =
+      amount === "" || amount == null ? null : Number(String(amount).replace(",", "."));
+    if (amountValue != null && (!Number.isFinite(amountValue) || amountValue < 0)) {
+      return res.status(400).json({ error: "Invalid purchase amount", code: "INVALID_AMOUNT" });
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found", code: "NOT_FOUND" });
+    }
+
+    const currentBranchCount = await prisma.branch.count({
+      where: { organizationId: organization.id },
+    });
+    if (branchLimit < currentBranchCount) {
+      return res.status(400).json({
+        error: `Branch limit (${branchLimit}) cannot be lower than current branches (${currentBranchCount})`,
+        code: "PLAN_LIMIT_TOO_LOW",
+        maxBranches: branchLimit,
+        branchCount: currentBranchCount,
+      });
+    }
+
+    const purchaseDate = purchasedAt ? new Date(purchasedAt) : new Date();
+    if (Number.isNaN(purchaseDate.getTime())) {
+      return res.status(400).json({ error: "Invalid purchase date", code: "INVALID_DATE" });
+    }
+
+    const [updated, purchase] = await prisma.$transaction([
+      prisma.organization.update({
+        where: { id: organization.id },
+        data: { plan: planValue, maxBranches: branchLimit },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          plan: true,
+          maxBranches: true,
+          createdAt: true,
+          _count: { select: { users: true, branches: true } },
+        },
+      }),
+      prisma.organizationPlanPurchase.create({
+        data: {
+          organizationId: organization.id,
+          plan: planValue,
+          amount: amountValue,
+          currency: String(currency || "SAR")
+            .trim()
+            .toUpperCase()
+            .slice(0, 8),
+          reference: reference ? String(reference).trim().slice(0, 200) : null,
+          note: note ? String(note).trim().slice(0, 500) : null,
+          purchasedAt: purchaseDate,
+        },
+      }),
+    ]);
+
+    res.status(201).json({
+      organization: updated,
+      purchase: {
+        ...purchase,
+        amount: purchase.amount == null ? null : Number(purchase.amount),
+      },
+    });
+  } catch (error) {
+    next(error);
   }
 });
 

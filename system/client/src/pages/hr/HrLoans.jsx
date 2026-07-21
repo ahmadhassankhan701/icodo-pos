@@ -51,7 +51,7 @@ export default function HrLoans() {
       <p style={{ color: "var(--muted)", fontSize: 14 }}>{t("hr.loansIntro")}</p>
       {msg ? <p style={{ color: "var(--danger, #c62828)" }}>{msg}</p> : null}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, maxWidth: 480 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, width: "100%" }}>
         <select
           value={form.employeeId}
           onChange={(e) => setForm({ ...form, employeeId: e.target.value })}

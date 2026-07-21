@@ -40,8 +40,14 @@ const CUSTOMER_ACCOUNTS_EXCLUDED = new Set([
   "FITNESS",
 ]);
 
+/** أنشطة تعتمد دفعات الصلاحية (صيدلية / بقالة) */
+const LOTS_EXPIRY_VERTICALS = new Set(["PHARMACY", "GROCERY"]);
+
+/** كافيه / مطعم — طاولة وملاحظات وإضافات بسيطة */
+const CAFE_POS_VERTICALS = new Set(["CAFE", "RESTAURANT"]);
+
 /**
- * @param {'wholesale' | 'appointments' | 'delivery' | 'customerAccounts' | 'petPosFilters'} feature
+ * @param {'wholesale' | 'appointments' | 'delivery' | 'customerAccounts' | 'petPosFilters' | 'lotsExpiry' | 'cafePosExtras'} feature
  * @param {string | null | undefined} businessVertical
  */
 export function isVerticalFeatureEnabled(feature, businessVertical) {
@@ -60,6 +66,10 @@ export function isVerticalFeatureEnabled(feature, businessVertical) {
       return !DELIVERY_EXCLUDED.has(v);
     case "customerAccounts":
       return !CUSTOMER_ACCOUNTS_EXCLUDED.has(v);
+    case "lotsExpiry":
+      return LOTS_EXPIRY_VERTICALS.has(v);
+    case "cafePosExtras":
+      return CAFE_POS_VERTICALS.has(v);
     default:
       return true;
   }

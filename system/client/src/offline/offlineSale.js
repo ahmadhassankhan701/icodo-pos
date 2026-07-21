@@ -12,6 +12,8 @@
  * @param {Array<{ method: string, amount: number }>|undefined} p.paymentSplits
  * @param {{ id: string, name: string, phone?: string } | null} p.customer
  * @param {"RETAIL"|"WHOLESALE"} [p.saleChannel]
+ * @param {string|null} [p.tableNumber]
+ * @param {string|null} [p.orderNote]
  */
 export function buildOfflineSalePreview(p) {
   const {
@@ -26,14 +28,17 @@ export function buildOfflineSalePreview(p) {
     paymentSplits,
     customer,
     saleChannel,
+    tableNumber,
+    orderNote,
   } = p;
   const pm = paymentSplits ? "SPLIT" : String(paymentMethod || "CASH").toUpperCase();
   const items = cartItems.map((i) => {
     const subtotal = i.unitPrice * i.quantity;
     return {
-      id: `local-line-${i.productId}`,
+      id: `local-line-${i.lineKey || i.productId}`,
       quantity: i.quantity,
       subtotal,
+      modifiers: Array.isArray(i.modifiers) && i.modifiers.length ? i.modifiers : null,
       product: {
         name: i.name,
         nameEn: i.nameEn ?? null,
@@ -52,6 +57,8 @@ export function buildOfflineSalePreview(p) {
     branch: { name: branchName },
     user: { name: cashierName },
     customer: customer || null,
+    tableNumber: tableNumber || null,
+    orderNote: orderNote || null,
     items,
     channel: saleChannel === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
     _offlinePending: true,

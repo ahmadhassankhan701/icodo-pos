@@ -41,9 +41,10 @@ const PIE_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#64748b"];
 
 export default function Reports() {
   const { t, locale } = useI18n();
-  const { user } = useAuth();
+  const { can } = useAuth();
   const [tab, setTab] = useState("charts");
   const branchId = useActiveBranchId();
+  const canManageExpenses = can("expenses");
   const [from, setFrom] = useState(() => toYMD(startOfMonthDate()));
   const [to, setTo] = useState(() => toYMD(new Date()));
   const [groupBy, setGroupBy] = useState("day");
@@ -58,6 +59,7 @@ export default function Reports() {
     description: "",
     expenseDate: toYMD(new Date()),
   });
+  const [editingExpenseId, setEditingExpenseId] = useState(null);
 
   const loadAnalytics = useCallback(async () => {
     setLoading(true);
@@ -135,16 +137,20 @@ export default function Reports() {
     try {
       const amt = Number(String(form.amount).replace(",", "."));
       if (!Number.isFinite(amt) || amt < 0) throw new Error(t("reports.badAmount"));
-      await api("/api/expenses", {
-        method: "POST",
-        body: {
-          category: form.category,
-          amount: amt,
-          description: form.description.trim() || undefined,
-          expenseDate: new Date(form.expenseDate + "T12:00:00").toISOString(),
-        },
-      });
-      setForm((f) => ({ ...f, amount: "", description: "" }));
+      const body = {
+        category: form.category,
+        amount: amt,
+        description: form.description.trim() || undefined,
+        expenseDate: new Date(form.expenseDate + "T12:00:00").toISOString(),
+      };
+      if (editingExpenseId) {
+        await api(`/api/expenses/${editingExpenseId}`, { method: "PATCH", body });
+        setMsg(t("reports.expenseUpdated"));
+        setEditingExpenseId(null);
+      } else {
+        await api("/api/expenses", { method: "POST", body });
+      }
+      setForm((f) => ({ ...f, amount: "", description: "", category: "OTHER", expenseDate: toYMD(new Date()) }));
       await loadExpenses();
       await loadAnalytics();
     } catch (err) {
@@ -152,10 +158,25 @@ export default function Reports() {
     }
   };
 
+  const startEditExpense = (row) => {
+    setEditingExpenseId(row.id);
+    setForm({
+      category: row.category || "OTHER",
+      amount: String(row.amount ?? ""),
+      description: row.description || "",
+      expenseDate: toYMD(row.expenseDate || new Date()),
+    });
+    setTab("expenses");
+  };
+
   const delExpense = async (id) => {
     if (!window.confirm(t("reports.confirmDeleteExpense"))) return;
     try {
       await api(`/api/expenses/${id}`, { method: "DELETE" });
+      if (editingExpenseId === id) {
+        setEditingExpenseId(null);
+        setForm({ category: "OTHER", amount: "", description: "", expenseDate: toYMD(new Date()) });
+      }
       await loadExpenses();
       await loadAnalytics();
     } catch (err) {
@@ -166,17 +187,19 @@ export default function Reports() {
   const chartData = analytics?.series || [];
 
   return (
-    <div style={{ maxWidth: 1100, width: "100%", marginInline: "auto" }}>
+    <div style={{ width: "100%" }}>
       <h1 style={{ marginTop: 0 }}>{t("reports.title")}</h1>
-      <p style={{ color: "var(--muted)", fontSize: 14, maxWidth: 720 }}>{t("reports.intro")}</p>
+      <p style={{ color: "var(--muted)", fontSize: 14 }}>{t("reports.intro")}</p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
         <button type="button" className="btn-touch" style={{ background: tab === "charts" ? "var(--accent)" : "var(--surface2)", color: tab === "charts" ? "#fff" : "var(--text)" }} onClick={() => setTab("charts")}>
           {t("reports.tabCharts")}
         </button>
-        <button type="button" className="btn-touch" style={{ background: tab === "expenses" ? "var(--accent)" : "var(--surface2)", color: tab === "expenses" ? "#fff" : "var(--text)" }} onClick={() => setTab("expenses")}>
-          {t("reports.tabExpenses")}
-        </button>
+        {canManageExpenses ? (
+          <button type="button" className="btn-touch" style={{ background: tab === "expenses" ? "var(--accent)" : "var(--surface2)", color: tab === "expenses" ? "#fff" : "var(--text)" }} onClick={() => setTab("expenses")}>
+            {t("reports.tabExpenses")}
+          </button>
+        ) : null}
       </div>
 
       <div className="card" style={{ marginBottom: 16, display: "grid", gap: 12 }}>
@@ -286,10 +309,10 @@ export default function Reports() {
         </>
       ) : null}
 
-      {tab === "expenses" ? (
+      {tab === "expenses" && canManageExpenses ? (
         <>
           <form className="card" onSubmit={addExpense} style={{ display: "grid", gap: 10, marginBottom: 16 }}>
-            <strong>{t("reports.addExpense")}</strong>
+            <strong>{editingExpenseId ? t("reports.editExpense") : t("reports.addExpense")}</strong>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("expense.category")}</span>
@@ -324,9 +347,23 @@ export default function Reports() {
               <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("expense.note")}</span>
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ minHeight: 44, padding: "0 12px" }} />
             </label>
-            <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 220 }}>
-              {t("reports.saveExpense")}
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 220 }}>
+                {editingExpenseId ? t("common.save") : t("reports.saveExpense")}
+              </button>
+              {editingExpenseId ? (
+                <button
+                  type="button"
+                  className="btn-touch"
+                  onClick={() => {
+                    setEditingExpenseId(null);
+                    setForm({ category: "OTHER", amount: "", description: "", expenseDate: toYMD(new Date()) });
+                  }}
+                >
+                  {t("common.cancel")}
+                </button>
+              ) : null}
+            </div>
           </form>
 
           <div className="card" style={{ overflowX: "auto" }}>
@@ -348,9 +385,14 @@ export default function Reports() {
                     <td style={{ padding: 8, fontWeight: 600 }}>{Number(row.amount).toFixed(2)}</td>
                     <td style={{ padding: 8 }}>{row.description || "—"}</td>
                     <td style={{ padding: 8 }}>
-                      <button type="button" className="btn-touch" style={{ background: "var(--danger)", color: "#fff" }} onClick={() => delExpense(row.id)}>
-                        {t("common.delete")}
-                      </button>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button type="button" className="btn-touch" onClick={() => startEditExpense(row)}>
+                          {t("common.edit")}
+                        </button>
+                        <button type="button" className="btn-touch" style={{ background: "var(--danger)", color: "#fff" }} onClick={() => delExpense(row.id)}>
+                          {t("common.delete")}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

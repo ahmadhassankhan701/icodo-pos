@@ -19,11 +19,13 @@ import {
   normalizePhone,
   shouldDeferLoyaltyEarn,
 } from "../lib/loyalty.js";
+import { resolveLineModifiers } from "../lib/productModifiers.js";
 
 const router = Router();
 router.use(authMiddleware);
 
 const OK_PAY = new Set(["CASH", "CARD", "ONLINE", "ON_DELIVERY", "ON_ACCOUNT"]);
+const SALE_FILTER_PAY = new Set([...OK_PAY, "SPLIT"]);
 
 function roundMoney(n) {
   return Math.round(n * 100) / 100;
@@ -93,6 +95,8 @@ router.post("/checkout", async (req, res) => {
     couponCode: couponCodeRaw,
     loyaltyPointsToRedeem: loyaltyRedeemRaw,
     guestPhone: guestPhoneRaw,
+    tableNumber: tableNumberRaw,
+    orderNote: orderNoteRaw,
   } = req.body || {};
   const rawCh =
     saleChannelRaw != null && String(saleChannelRaw).trim()
@@ -174,6 +178,14 @@ router.post("/checkout", async (req, res) => {
       Math.floor(Number(loyaltyRedeemRaw) || 0)
     );
     const guestPhoneNorm = normalizePhone(guestPhoneRaw);
+    const tableNumber =
+      tableNumberRaw != null && String(tableNumberRaw).trim()
+        ? String(tableNumberRaw).trim().slice(0, 40)
+        : null;
+    const orderNote =
+      orderNoteRaw != null && String(orderNoteRaw).trim()
+        ? String(orderNoteRaw).trim().slice(0, 500)
+        : null;
 
     let total = new Prisma.Decimal(0);
     const lineData = [];
@@ -193,10 +205,21 @@ router.post("/checkout", async (req, res) => {
       if (!inv || inv.quantity < qty) {
         throw new Error(`كمية غير كافية: ${product.name}`);
       }
-      const unitPrice = unitPriceDecimalForSale(product, useWholesalePricing);
+      const basePrice = unitPriceDecimalForSale(product, useWholesalePricing);
+      const { selected, delta } = resolveLineModifiers(product, line.modifiers || line.modifierKeys);
+      const unitPrice =
+        delta === 0
+          ? basePrice
+          : new Prisma.Decimal(roundMoney(Number(basePrice) + delta).toFixed(2));
       const subtotal = unitPrice.mul(qty);
       total = total.add(subtotal);
-      lineData.push({ productId, quantity: qty, unitPrice, subtotal });
+      lineData.push({
+        productId,
+        quantity: qty,
+        unitPrice,
+        subtotal,
+        modifiers: selected.length ? selected : null,
+      });
     }
 
     const subtotalDec = total;
@@ -487,12 +510,15 @@ router.post("/checkout", async (req, res) => {
             canEarn && pointsEarnedPreview > 0
               ? new Prisma.Decimal(eligibleBase.toFixed(2))
               : null,
+          tableNumber,
+          orderNote,
           items: {
             create: lineData.map((l) => ({
               productId: l.productId,
               quantity: l.quantity,
               unitPrice: l.unitPrice,
               subtotal: l.subtotal,
+              ...(l.modifiers ? { modifiers: l.modifiers } : {}),
             })),
           },
         },
@@ -779,7 +805,7 @@ router.post("/:saleId/confirm-delivery", async (req, res) => {
 });
 
 router.get("/", async (req, res) => {
-  const { branchId, from, to, limit = "50" } = req.query;
+  const { branchId, from, to, limit = "50", paymentMethod, q } = req.query;
   const where = {
     branch: { organizationId: req.user.organizationId },
   };
@@ -790,12 +816,30 @@ router.get("/", async (req, res) => {
     if (from) where.createdAt.gte = new Date(String(from));
     if (to) where.createdAt.lte = new Date(String(to));
   }
+  const pm = paymentMethod != null ? String(paymentMethod).trim().toUpperCase() : "";
+  if (pm && SALE_FILTER_PAY.has(pm)) {
+    where.paymentMethod = pm;
+  }
+  const query = q != null ? String(q).trim() : "";
+  if (query) {
+    where.AND = [
+      ...(where.AND || []),
+      {
+        OR: [
+          { invoiceNumber: { contains: query, mode: "insensitive" } },
+          { id: { contains: query, mode: "insensitive" } },
+          { customer: { name: { contains: query, mode: "insensitive" } } },
+          { customer: { phone: { contains: query, mode: "insensitive" } } },
+        ],
+      },
+    ];
+  }
   const sales = await prisma.sale.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: Math.min(200, Math.max(1, parseInt(String(limit), 10) || 50)),
     include: {
-      items: { include: { product: { select: { name: true, sku: true } } } },
+      items: { include: { product: { select: { name: true, nameEn: true, sku: true } } } },
       branch: { select: { name: true } },
       customer: { select: { id: true, name: true, phone: true } },
       user: { select: { name: true } },

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { getPendingQueueCount, processSyncQueue } from "../offline/syncQueue.js";
+import { getFailedQueueCount, getPendingQueueCount, processSyncQueue } from "../offline/syncQueue.js";
 import { getOrCreateDeviceId } from "../offline/db.js";
 
 const OfflineContext = createContext(null);
@@ -10,14 +10,17 @@ export function OfflineProvider({ children }) {
   );
   const [syncing, setSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [lastMessage, setLastMessage] = useState("");
 
   const refreshPending = useCallback(async () => {
     try {
-      const n = await getPendingQueueCount();
+      const [n, f] = await Promise.all([getPendingQueueCount(), getFailedQueueCount()]);
       setPendingCount(n);
+      setFailedCount(f);
     } catch {
       setPendingCount(0);
+      setFailedCount(0);
     }
   }, []);
 
@@ -66,11 +69,12 @@ export function OfflineProvider({ children }) {
       online,
       syncing,
       pendingCount,
+      failedCount,
       lastMessage,
       refreshPending,
       runSync,
     }),
-    [online, syncing, pendingCount, lastMessage, refreshPending, runSync]
+    [online, syncing, pendingCount, failedCount, lastMessage, refreshPending, runSync]
   );
 
   return <OfflineContext.Provider value={value}>{children}</OfflineContext.Provider>;
@@ -83,6 +87,7 @@ export function useOffline() {
       online: typeof navigator !== "undefined" && navigator.onLine !== false,
       syncing: false,
       pendingCount: 0,
+      failedCount: 0,
       lastMessage: "",
       refreshPending: async () => {},
       runSync: async () => 0,

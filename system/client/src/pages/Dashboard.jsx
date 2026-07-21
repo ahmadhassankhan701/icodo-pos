@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [topCustomers, setTopCustomers] = useState([]);
   const [topServices, setTopServices] = useState([]);
   const [salesByEmployees, setSalesByEmployees] = useState([]);
+  const [byBranch, setByBranch] = useState([]);
 
   useEffect(() => {
     const q = branchId ? `?branchId=${branchId}` : "";
@@ -73,9 +74,19 @@ export default function Dashboard() {
       setTopCustomers(Array.isArray(tc) ? tc : []);
       setTopServices(Array.isArray(ts) ? ts : []);
       setSalesByEmployees(Array.isArray(se) ? se : []);
+      if (user?.role === "ADMIN" && !branchId) {
+        try {
+          const bb = await api("/api/dashboard/sales-by-branch");
+          setByBranch(Array.isArray(bb) ? bb : []);
+        } catch {
+          setByBranch([]);
+        }
+      } else {
+        setByBranch([]);
+      }
     };
     run().catch(() => {});
-  }, [branchId]);
+  }, [branchId, user?.role]);
 
   const cur = (v) => `${Number(v).toFixed(2)} ${t("common.currency")}`;
 
@@ -281,6 +292,26 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 </div>
               </section>
+
+              {byBranch.length > 1 ? (
+                <section className="dash-shell-card dash-chart-card">
+                  <div className="dash-chart-head">
+                    <div>
+                      <h3>{t("dashboard.chartByBranch")}</h3>
+                      <p>{t("dashboard.branchViewSub")}</p>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={byBranch}>
+                      <CartesianGrid strokeDasharray="3 8" stroke="var(--chart-grid)" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v) => [cur(v), t("dashboard.tooltipSales")]} />
+                      <Bar dataKey="value" fill="#2563EB" radius={[10, 10, 10, 10]} maxBarSize={40} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </section>
+              ) : null}
 
               <section className="dash-shell-card dash-chart-card">
                 <div className="dash-chart-head">

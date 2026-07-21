@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { BUSINESS_VERTICAL_IDS } from "../lib/businessVerticalIds.js";
+import { BUSINESS_VERTICAL_IDS, isMvpVerticalEnabled } from "../lib/businessVerticalIds.js";
 
 const inp = {
   width: "100%",
@@ -16,11 +16,23 @@ const inp = {
 const th = { padding: "8px 10px", textAlign: "start" };
 const td = { padding: "8px 10px", verticalAlign: "middle" };
 
+const emptyPlanForm = {
+  organizationId: "",
+  plan: "PREMIUM",
+  maxBranches: "3",
+  amount: "",
+  currency: "SAR",
+  reference: "",
+  note: "",
+  purchasedAt: new Date().toISOString().slice(0, 10),
+};
+
 export default function PlatformOrganizations() {
   const { t } = useI18n();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [okMsg, setOkMsg] = useState("");
   const [form, setForm] = useState({
     organizationName: "",
     organizationSlug: "",
@@ -33,6 +45,8 @@ export default function PlatformOrganizations() {
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
+  const [planForm, setPlanForm] = useState(emptyPlanForm);
+  const [planBusy, setPlanBusy] = useState(false);
 
   const load = () =>
     api("/api/platform/organizations")
@@ -50,6 +64,7 @@ export default function PlatformOrganizations() {
   const create = async (e) => {
     e.preventDefault();
     setErr("");
+    setOkMsg("");
     await api("/api/platform/organizations", {
       method: "POST",
       body: {
@@ -91,6 +106,42 @@ export default function PlatformOrganizations() {
     await load();
   };
 
+  const recordPlan = async (e) => {
+    e.preventDefault();
+    if (!planForm.organizationId) {
+      setErr(t("platform.pickOrg"));
+      return;
+    }
+    setPlanBusy(true);
+    setErr("");
+    setOkMsg("");
+    try {
+      await api(`/api/platform/organizations/${planForm.organizationId}/plan-purchases`, {
+        method: "POST",
+        body: {
+          plan: planForm.plan,
+          maxBranches: Number(planForm.maxBranches) || 1,
+          amount: planForm.amount === "" ? null : planForm.amount,
+          currency: planForm.currency || "SAR",
+          reference: planForm.reference || undefined,
+          note: planForm.note || undefined,
+          purchasedAt: planForm.purchasedAt
+            ? new Date(`${planForm.purchasedAt}T12:00:00`).toISOString()
+            : undefined,
+        },
+      });
+      setOkMsg(t("platform.planRecorded"));
+      setPlanForm((f) => ({ ...emptyPlanForm, organizationId: f.organizationId }));
+      await load();
+    } catch (x) {
+      setErr(x.message || "Error");
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
+  const selectedOrg = rows.find((o) => o.id === planForm.organizationId);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ margin: 0 }}>{t("platform.orgs")}</h1>
@@ -99,6 +150,11 @@ export default function PlatformOrganizations() {
       {err ? (
         <div className="card" style={{ color: "var(--danger, #c00)", fontSize: 14 }}>
           {err}
+        </div>
+      ) : null}
+      {okMsg ? (
+        <div className="card" style={{ color: "var(--muted)", fontSize: 14 }}>
+          {okMsg}
         </div>
       ) : null}
 
@@ -135,8 +191,9 @@ export default function PlatformOrganizations() {
           >
             <option value="">{t("platform.businessVertical")} ({t("common.none")})</option>
             {BUSINESS_VERTICAL_IDS.map((id) => (
-              <option key={id} value={id}>
+              <option key={id} value={id} disabled={!isMvpVerticalEnabled(id)}>
                 {t(`register.vertical.${id}`)}
+                {!isMvpVerticalEnabled(id) ? ` (${t("register.comingSoon")})` : ""}
               </option>
             ))}
           </select>
@@ -176,6 +233,96 @@ export default function PlatformOrganizations() {
         </button>
       </form>
 
+      <form className="card" onSubmit={recordPlan} style={{ display: "grid", gap: 10 }}>
+        <strong>{t("platform.recordPlan")}</strong>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 10,
+          }}
+        >
+          <select
+            required
+            value={planForm.organizationId}
+            onChange={(e) => setPlanForm({ ...planForm, organizationId: e.target.value })}
+            style={inp}
+            aria-label={t("platform.pickOrg")}
+          >
+            <option value="">{t("platform.pickOrg")}</option>
+            {rows.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={planForm.plan}
+            onChange={(e) => setPlanForm({ ...planForm, plan: e.target.value })}
+            style={inp}
+            aria-label={t("platform.plan")}
+          >
+            <option value="FREE">{t("plan.name.FREE")}</option>
+            <option value="PREMIUM">{t("plan.name.PREMIUM")}</option>
+          </select>
+          <input
+            type="number"
+            min={1}
+            max={1000}
+            required
+            placeholder={t("platform.maxBranches")}
+            value={planForm.maxBranches}
+            onChange={(e) => setPlanForm({ ...planForm, maxBranches: e.target.value })}
+            style={inp}
+          />
+          <input
+            placeholder={t("platform.amount")}
+            value={planForm.amount}
+            onChange={(e) => setPlanForm({ ...planForm, amount: e.target.value })}
+            style={inp}
+          />
+          <input
+            placeholder={t("platform.currency")}
+            value={planForm.currency}
+            onChange={(e) => setPlanForm({ ...planForm, currency: e.target.value.toUpperCase() })}
+            style={inp}
+          />
+          <input
+            type="date"
+            value={planForm.purchasedAt}
+            onChange={(e) => setPlanForm({ ...planForm, purchasedAt: e.target.value })}
+            style={inp}
+            aria-label={t("platform.purchasedAt")}
+          />
+          <input
+            placeholder={t("platform.reference")}
+            value={planForm.reference}
+            onChange={(e) => setPlanForm({ ...planForm, reference: e.target.value })}
+            style={inp}
+          />
+          <input
+            placeholder={t("platform.note")}
+            value={planForm.note}
+            onChange={(e) => setPlanForm({ ...planForm, note: e.target.value })}
+            style={inp}
+          />
+        </div>
+        {selectedOrg ? (
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>
+            {t("platform.currentPlan")}: {selectedOrg.plan || "FREE"} · {t("platform.maxBranches")}:{" "}
+            {selectedOrg.maxBranches ?? "—"}
+          </div>
+        ) : null}
+        <button
+          type="submit"
+          className="btn-touch"
+          disabled={planBusy}
+          style={{ background: "var(--accent)", color: "#fff", maxWidth: 320 }}
+        >
+          {t("platform.recordPlanBtn")}
+        </button>
+      </form>
+
       <div className="card" style={{ overflowX: "auto" }}>
         {loading ? (
           <div style={{ padding: 16 }}>{t("common.loading")}</div>
@@ -186,6 +333,7 @@ export default function PlatformOrganizations() {
                 <th style={th}>{t("platform.orgName")}</th>
                 <th style={th}>{t("platform.slug")}</th>
                 <th style={th}>{t("platform.businessVertical")}</th>
+                <th style={th}>{t("platform.plan")}</th>
                 <th style={th}>{t("platform.branchesCount")}</th>
                 <th style={th}>{t("platform.usersCount")}</th>
                 <th style={th} />
@@ -211,6 +359,7 @@ export default function PlatformOrganizations() {
                           ? t(`register.vertical.${o.businessVertical}`)
                           : t("common.none")}
                       </td>
+                      <td style={td}>{o.plan || "FREE"}</td>
                       <td style={td}>{o._count?.branches ?? "—"}</td>
                       <td style={td}>{o._count?.users ?? "—"}</td>
                       <td style={td}>
@@ -233,11 +382,34 @@ export default function PlatformOrganizations() {
                           ? t(`register.vertical.${o.businessVertical}`)
                           : t("common.none")}
                       </td>
+                      <td style={td}>
+                        {o.plan || "FREE"}
+                        {o.maxBranches != null ? ` · ≤${o.maxBranches}` : ""}
+                      </td>
                       <td style={td}>{o._count?.branches ?? "—"}</td>
                       <td style={td}>{o._count?.users ?? "—"}</td>
                       <td style={td}>
-                        <button type="button" className="btn-touch" onClick={() => startEdit(o)}>
+                        <button
+                          type="button"
+                          className="btn-touch"
+                          onClick={() => startEdit(o)}
+                          style={{ marginInlineEnd: 8 }}
+                        >
                           {t("common.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-touch"
+                          onClick={() =>
+                            setPlanForm((f) => ({
+                              ...f,
+                              organizationId: o.id,
+                              plan: o.plan || "PREMIUM",
+                              maxBranches: String(o.maxBranches || 3),
+                            }))
+                          }
+                        >
+                          {t("platform.recordPlan")}
                         </button>
                       </td>
                     </>

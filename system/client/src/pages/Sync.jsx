@@ -225,7 +225,7 @@ export default function Sync() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720, width: "100%", marginInline: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
       <h1 style={{ margin: 0 }}>{t("sync.title")}</h1>
       <p style={{ color: "var(--muted)", margin: 0 }}>
         {t("sync.intro")}{" "}
@@ -234,26 +234,30 @@ export default function Sync() {
       </p>
 
       <form className="card" onSubmit={save}>
+        <div className="page-form-grid" style={{ marginBottom: 12 }}>
+          <label className="page-form-field">
+            <span>{t("sync.baseUrl")}</span>
+            <input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://example.com"
+              style={inp}
+            />
+          </label>
+          <label className="page-form-field">
+            <span>{t("sync.apiKey")}</span>
+            <span style={{ fontSize: 12 }}>{t("sync.apiKeySessionHint")}</span>
+            <input
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              type="password"
+              placeholder={settings?.apiKeySet && !apiKey ? "••••••••" : ""}
+              autoComplete="off"
+              style={inp}
+            />
+          </label>
+        </div>
         <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <span>{t("sync.baseUrl")}</span>
-          <input
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://example.com"
-            style={inp}
-          />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <span>{t("sync.apiKey")}</span>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("sync.apiKeySessionHint")}</span>
-          <input
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            type="password"
-            placeholder={settings?.apiKeySet && !apiKey ? "••••••••" : ""}
-            autoComplete="off"
-            style={inp}
-          />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 8 }}>
             <button
               type="button"

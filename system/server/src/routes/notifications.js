@@ -108,8 +108,54 @@ async function buildItems(req, types) {
   }
 
   if (types.has("EXPIRY")) {
-    const branchId =
-      branchIdFilter || req.user.branchId || null;
+    const branchId = branchIdFilter || req.user.branchId || null;
+    const withinDays = 30;
+    const seenProducts = new Set();
+
+    const lots = await prisma.inventoryLot.findMany({
+      where: {
+        organizationId: orgId,
+        quantityOnHand: { gt: 0 },
+        expiryDate: { not: null },
+        ...(branchId ? { branchId } : {}),
+      },
+      include: {
+        product: { select: { id: true, name: true, nameEn: true, sku: true, imageUrl: true, isActive: true } },
+        branch: { select: { id: true, name: true, nameEn: true } },
+      },
+      orderBy: { expiryDate: "asc" },
+      take: 300,
+    });
+
+    for (const lot of lots) {
+      if (!lot.product?.isActive) continue;
+      const days = calendarDaysUntilExpiryUTC(lot.expiryDate);
+      if (days === null || days > withinDays) continue;
+      const status = days < 0 ? "expired" : days === 0 ? "today" : "soon";
+      seenProducts.add(lot.product.id);
+      items.push({
+        key: `expiry-lot:${lot.id}`,
+        type: "EXPIRY",
+        severity: status === "expired" ? "critical" : status === "today" ? "warning" : "info",
+        at: lot.expiryDate.toISOString(),
+        branchId: lot.branchId,
+        branchName: lot.branch?.name || null,
+        branchNameEn: lot.branch?.nameEn ?? null,
+        payload: {
+          productId: lot.product.id,
+          productName: lot.product.name,
+          productNameEn: lot.product.nameEn ?? null,
+          sku: lot.product.sku,
+          daysUntilExpiry: days,
+          status,
+          quantityOnHand: Number(lot.quantityOnHand),
+          lotId: lot.id,
+          imageUrl: resolveStoredImageUrl(lot.product.imageUrl),
+        },
+        action: { path: "/products", hash: "lots" },
+      });
+    }
+
     const products = await prisma.product.findMany({
       where: {
         organizationId: orgId,
@@ -122,13 +168,14 @@ async function buildItems(req, types) {
       orderBy: { expiryDate: "asc" },
     });
     for (const p of products) {
+      if (seenProducts.has(p.id)) continue;
       const days = calendarDaysUntilExpiryUTC(p.expiryDate);
-      if (days === null || days > 0) continue;
-      const status = days < 0 ? "expired" : "today";
+      if (days === null || days > withinDays) continue;
+      const status = days < 0 ? "expired" : days === 0 ? "today" : "soon";
       items.push({
         key: `expiry:${p.id}`,
         type: "EXPIRY",
-        severity: status === "expired" ? "critical" : "warning",
+        severity: status === "expired" ? "critical" : status === "today" ? "warning" : "info",
         at: p.expiryDate.toISOString(),
         branchId: branchId || null,
         branchName: null,

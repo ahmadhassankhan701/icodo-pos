@@ -18,7 +18,6 @@ const inp = {
   color: "var(--text)",
   border: "1px solid var(--border)",
   width: "100%",
-  maxWidth: 360,
   boxSizing: "border-box",
 };
 
@@ -152,7 +151,7 @@ export default function LoyaltyCoupons() {
   }
 
   return (
-    <div style={{ maxWidth: 900, width: "100%", marginInline: "auto" }}>
+    <div style={{ width: "100%" }}>
       <h1 style={{ marginTop: 0 }}>{t("loyalty.title")}</h1>
       <p style={{ color: "var(--muted)", fontSize: 14 }}>{t("loyalty.intro")}</p>
       {msg ? (
@@ -175,50 +174,73 @@ export default function LoyaltyCoupons() {
           {t("loyalty.enabled")}
         </label>
 
-        <label style={{ display: "block", marginBottom: 12 }}>
-          <span style={{ fontWeight: 700 }}>{t("loyalty.earnBase")}</span>
-          <select
-            value={settings.earnBase}
-            onChange={(e) => setSettings({ ...settings, earnBase: e.target.value })}
-            style={{ ...inp, display: "block", marginTop: 6 }}
-          >
-            <option value="PER_ORDER_TOTAL">{t("loyalty.earnPerOrder")}</option>
-            <option value="LIFETIME_SPEND">{t("loyalty.earnLifetime")}</option>
-          </select>
-        </label>
-
-        <label style={{ display: "block", marginBottom: 12 }}>
-          {t("loyalty.earnEvery")}
-          <input
-            type="number"
-            min="0.01"
-            step="any"
-            value={String(settings.earnEveryAmount)}
-            onChange={(e) => setSettings({ ...settings, earnEveryAmount: e.target.value })}
-            style={{ ...inp, display: "block", marginTop: 6 }}
-          />
-        </label>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          {t("loyalty.earnPoints")}
-          <input
-            type="number"
-            min="0"
-            value={settings.earnPoints}
-            onChange={(e) => setSettings({ ...settings, earnPoints: parseInt(e.target.value, 10) || 0 })}
-            style={{ ...inp, display: "block", marginTop: 6 }}
-          />
-        </label>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          {t("loyalty.minOrder")}
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={String(settings.minOrderForEarn)}
-            onChange={(e) => setSettings({ ...settings, minOrderForEarn: e.target.value })}
-            style={{ ...inp, display: "block", marginTop: 6 }}
-          />
-        </label>
+        <div className="page-form-grid" style={{ marginBottom: 12 }}>
+          <label className="page-form-field">
+            <span style={{ fontWeight: 700, color: "var(--text)" }}>{t("loyalty.earnBase")}</span>
+            <select
+              value={settings.earnBase}
+              onChange={(e) => setSettings({ ...settings, earnBase: e.target.value })}
+              style={inp}
+            >
+              <option value="PER_ORDER_TOTAL">{t("loyalty.earnPerOrder")}</option>
+              <option value="LIFETIME_SPEND">{t("loyalty.earnLifetime")}</option>
+            </select>
+          </label>
+          <label className="page-form-field">
+            <span>{t("loyalty.earnEvery")}</span>
+            <input
+              type="number"
+              min="0.01"
+              step="any"
+              value={String(settings.earnEveryAmount)}
+              onChange={(e) => setSettings({ ...settings, earnEveryAmount: e.target.value })}
+              style={inp}
+            />
+          </label>
+          <label className="page-form-field">
+            <span>{t("loyalty.earnPoints")}</span>
+            <input
+              type="number"
+              min="0"
+              value={settings.earnPoints}
+              onChange={(e) => setSettings({ ...settings, earnPoints: parseInt(e.target.value, 10) || 0 })}
+              style={inp}
+            />
+          </label>
+          <label className="page-form-field">
+            <span>{t("loyalty.minOrder")}</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={String(settings.minOrderForEarn)}
+              onChange={(e) => setSettings({ ...settings, minOrderForEarn: e.target.value })}
+              style={inp}
+            />
+          </label>
+          <label className="page-form-field">
+            <span style={{ fontWeight: 700, color: "var(--text)" }}>{t("loyalty.awardTiming")}</span>
+            <select
+              value={settings.awardTiming}
+              onChange={(e) => setSettings({ ...settings, awardTiming: e.target.value })}
+              style={inp}
+            >
+              <option value="ON_PAYMENT">{t("loyalty.onPayment")}</option>
+              <option value="ON_DELIVERY">{t("loyalty.onDelivery")}</option>
+            </select>
+          </label>
+          <label className="page-form-field">
+            <span>{t("loyalty.redeemPointsPer")}</span>
+            <input
+              type="number"
+              min="0.01"
+              step="any"
+              value={String(settings.redeemPointsPerCurrency)}
+              onChange={(e) => setSettings({ ...settings, redeemPointsPerCurrency: e.target.value })}
+              style={inp}
+            />
+          </label>
+        </div>
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <input
@@ -229,18 +251,6 @@ export default function LoyaltyCoupons() {
           {t("loyalty.excludeWholesale")}
         </label>
 
-        <label style={{ display: "block", marginBottom: 12 }}>
-          <span style={{ fontWeight: 700 }}>{t("loyalty.awardTiming")}</span>
-          <select
-            value={settings.awardTiming}
-            onChange={(e) => setSettings({ ...settings, awardTiming: e.target.value })}
-            style={{ ...inp, display: "block", marginTop: 6 }}
-          >
-            <option value="ON_PAYMENT">{t("loyalty.onPayment")}</option>
-            <option value="ON_DELIVERY">{t("loyalty.onDelivery")}</option>
-          </select>
-        </label>
-
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <input
             type="checkbox"
@@ -248,17 +258,6 @@ export default function LoyaltyCoupons() {
             onChange={(e) => setSettings({ ...settings, redemptionEnabled: e.target.checked })}
           />
           {t("loyalty.redemptionEnabled")}
-        </label>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          {t("loyalty.redeemPointsPer")}
-          <input
-            type="number"
-            min="0.01"
-            step="any"
-            value={String(settings.redeemPointsPerCurrency)}
-            onChange={(e) => setSettings({ ...settings, redeemPointsPerCurrency: e.target.value })}
-            style={{ ...inp, display: "block", marginTop: 6 }}
-          />
         </label>
         <label style={{ display: "block", marginBottom: 12 }}>
           {t("loyalty.maxRedeemPct")}

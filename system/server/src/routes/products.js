@@ -4,6 +4,7 @@ import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
 import { resolveStoredImageUrl } from "../lib/productImageUrl.js";
 import { findBranchInOrg } from "../lib/orgScope.js";
+import { normalizeProductModifiers } from "../lib/productModifiers.js";
 import {
   buildProductsExcelBuffer,
   readFirstSheetRows,
@@ -679,6 +680,7 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
     initialStock,
     minStockLevel,
     expiryDate: expiryDateRaw,
+    modifiers: modifiersRaw,
   } = req.body || {};
   if (!nameEn?.trim()) return res.status(400).json({ error: "English product name is required" });
   if (!categoryId) return res.status(400).json({ error: "Category is required" });
@@ -718,6 +720,8 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
     expiryDate = d;
   }
 
+  const modifiers = normalizeProductModifiers(modifiersRaw);
+
   const barcodeTrim = barcode?.trim() || null;
   try {
     await assertBarcodeAvailable(prisma, req.user.organizationId, barcodeTrim, null);
@@ -754,6 +758,7 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
       imageUrl: imageTrim,
       expiryDate,
       expiryAlertDaysBefore: null,
+      ...(modifiers ? { modifiers } : {}),
       inventories: {
         create: {
           branchId: bid,
@@ -907,6 +912,10 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermissi
       update.expiryDate = d;
       update.expiryAlertDaysBefore = null;
     }
+  }
+
+  if (data.modifiers !== undefined) {
+    update.modifiers = normalizeProductModifiers(data.modifiers);
   }
 
   try {

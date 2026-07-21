@@ -16,6 +16,54 @@ function pickCost(product) {
   return Number.isNaN(c) ? null : c;
 }
 
+function normalizeModifiers(mods) {
+  if (!Array.isArray(mods) || !mods.length) return [];
+  const out = [];
+  const seen = new Set();
+  for (const m of mods) {
+    const key = String(m?.key || "").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      key,
+      label: String(m?.label || key).trim(),
+      labelAr: m?.labelAr ? String(m.labelAr).trim() : null,
+      priceDelta: Math.round((Number(m?.priceDelta) || 0) * 100) / 100,
+    });
+  }
+  return out.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+export function cartLineKey(productId, modifiers) {
+  const mods = normalizeModifiers(modifiers);
+  if (!mods.length) return String(productId);
+  return `${productId}::${mods.map((m) => m.key).join(",")}`;
+}
+
+function unitPriceWithMods(product, useWholesale, modifiers) {
+  const base = pickUnitPrice(product, useWholesale);
+  const delta = normalizeModifiers(modifiers).reduce((s, m) => s + m.priceDelta, 0);
+  return Math.round((base + delta) * 100) / 100;
+}
+
+function mapCartLine(i) {
+  const modifiers = normalizeModifiers(i.modifiers);
+  const productId = i.productId;
+  return {
+    lineKey: i.lineKey || cartLineKey(productId, modifiers),
+    productId,
+    name: i.name,
+    nameEn: i.nameEn ?? null,
+    imageUrl: i.imageUrl,
+    petType: i.petType,
+    unitPrice: Number(i.unitPrice),
+    cost: i.cost != null ? Number(i.cost) : null,
+    quantity: Math.max(1, Math.floor(Number(i.quantity) || 1)),
+    maxStock: Math.max(0, Math.floor(Number(i.maxStock) || 0)),
+    modifiers,
+  };
+}
+
 export const useCartStore = create((set, get) => ({
   branchId: null,
   items: [],
@@ -36,27 +84,36 @@ export const useCartStore = create((set, get) => ({
           if (!p) return i;
           return {
             ...i,
-            unitPrice: pickUnitPrice(p, state.useWholesalePricing),
+            unitPrice: unitPriceWithMods(p, state.useWholesalePricing, i.modifiers),
             cost: pickCost(p),
+            name: p.name,
+            nameEn: p.nameEn || null,
           };
         }),
       };
     }),
 
-  addProduct: (product, qty = 1) => {
+  /**
+   * @param {object} product
+   * @param {number} qty
+   * @param {{ modifiers?: object[] }} [opts]
+   */
+  addProduct: (product, qty = 1, opts = {}) => {
     const inv = product.inventories?.[0];
     const stock = inv?.quantity ?? 0;
     const useW = get().useWholesalePricing;
-    const unitPrice = pickUnitPrice(product, useW);
+    const modifiers = normalizeModifiers(opts.modifiers);
+    const lineKey = cartLineKey(product.id, modifiers);
+    const unitPrice = unitPriceWithMods(product, useW, modifiers);
     const cost = pickCost(product);
     set((state) => {
-      const existing = state.items.find((i) => i.productId === product.id);
+      const existing = state.items.find((i) => i.lineKey === lineKey);
       const nextQty = (existing?.quantity ?? 0) + qty;
       if (nextQty > stock) return state;
       if (existing) {
         return {
           items: state.items.map((i) =>
-            i.productId === product.id
+            i.lineKey === lineKey
               ? {
                   ...i,
                   quantity: nextQty,
@@ -64,6 +121,7 @@ export const useCartStore = create((set, get) => ({
                   nameEn: product.nameEn || null,
                   unitPrice,
                   cost,
+                  modifiers,
                 }
               : i
           ),
@@ -73,6 +131,7 @@ export const useCartStore = create((set, get) => ({
         items: [
           ...state.items,
           {
+            lineKey,
             productId: product.id,
             name: product.name,
             nameEn: product.nameEn || null,
@@ -82,26 +141,27 @@ export const useCartStore = create((set, get) => ({
             cost,
             quantity: qty,
             maxStock: stock,
+            modifiers,
           },
         ],
       };
     });
   },
 
-  setQuantity: (productId, quantity) => {
+  setQuantity: (lineKey, quantity) => {
     const q = Math.max(1, Math.floor(quantity));
     set((state) => ({
       items: state.items.map((i) => {
-        if (i.productId !== productId) return i;
+        if (i.lineKey !== lineKey) return i;
         const max = i.maxStock ?? q;
         return { ...i, quantity: Math.min(q, max) };
       }),
     }));
   },
 
-  removeLine: (productId) =>
+  removeLine: (lineKey) =>
     set((state) => ({
-      items: state.items.filter((i) => i.productId !== productId),
+      items: state.items.filter((i) => i.lineKey !== lineKey),
     })),
 
   clear: () => set({ items: [] }),
@@ -109,19 +169,7 @@ export const useCartStore = create((set, get) => ({
   /** استرجاع سلة معلّقة — يجب أن تكون الأصناف بنفس شكل عناصر السلة */
   replaceAll: (items) =>
     set({
-      items: Array.isArray(items)
-        ? items.map((i) => ({
-            productId: i.productId,
-            name: i.name,
-            nameEn: i.nameEn ?? null,
-            imageUrl: i.imageUrl,
-            petType: i.petType,
-            unitPrice: Number(i.unitPrice),
-            cost: i.cost != null ? Number(i.cost) : null,
-            quantity: Math.max(1, Math.floor(Number(i.quantity) || 1)),
-            maxStock: Math.max(0, Math.floor(Number(i.maxStock) || 0)),
-          }))
-        : [],
+      items: Array.isArray(items) ? items.map(mapCartLine) : [],
     }),
 
   total: () => {

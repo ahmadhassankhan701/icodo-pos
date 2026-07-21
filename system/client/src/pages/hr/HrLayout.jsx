@@ -13,7 +13,7 @@ const linkStyle = ({ isActive }) => ({
 export default function HrLayout() {
   const { t } = useI18n();
   return (
-    <div style={{ maxWidth: 1200, width: "100%", marginInline: "auto" }}>
+    <div style={{ width: "100%" }}>
       <h1 style={{ marginTop: 0 }}>{t("hr.title")}</h1>
       <nav
         style={{

@@ -35,7 +35,7 @@ export function buildReceiptPlainText(sale, branchName, locale) {
   const storeLine = branchName || sale.branch?.name || "";
   if (storeLine) lines.push(storeLine);
   lines.push(`${locale === "en" ? "Date" : "التاريخ"}: ${new Date(sale.createdAt).toLocaleString(loc)}`);
-  lines.push(`${locale === "en" ? "Invoice #" : "رقم الفاتورة"}: ${sale.id}`);
+  lines.push(`${locale === "en" ? "Invoice #" : "رقم الفاتورة"}: ${sale.invoiceNumber || sale.id}`);
   lines.push(`${locale === "en" ? "Cashier" : "الكاشير"}: ${sale.user?.name || "—"}`);
   if (sale.channel === "WHOLESALE") {
     lines.push(locale === "en" ? "Channel: Wholesale" : "القناة: بيع بالجملة");
@@ -57,10 +57,22 @@ export function buildReceiptPlainText(sale, branchName, locale) {
       `${locale === "en" ? "Customer" : "العميل"}: ${sale.customer.name}${sale.customer.phone ? ` — ${sale.customer.phone}` : ""}`
     );
   }
+  if (sale.tableNumber) {
+    lines.push(`${locale === "en" ? "Table" : "الطاولة"}: ${sale.tableNumber}`);
+  }
+  if (sale.orderNote) {
+    lines.push(`${locale === "en" ? "Note" : "ملاحظة"}: ${sale.orderNote}`);
+  }
   lines.push("---");
   for (const it of sale.items || []) {
     const nm = productDisplayName(it.product, locale);
-    lines.push(`${nm} ×${it.quantity} = ${Number(it.subtotal).toFixed(2)} ${cur}`);
+    const mods = Array.isArray(it.modifiers) ? it.modifiers : [];
+    const modTxt = mods.length
+      ? ` (${mods
+          .map((m) => (locale === "en" ? m.label || m.key : m.labelAr || m.label || m.key))
+          .join(", ")})`
+      : "";
+    lines.push(`${nm}${modTxt} ×${it.quantity} = ${Number(it.subtotal).toFixed(2)} ${cur}`);
   }
   lines.push("---");
   const sub = sale.items?.reduce((s, it) => s + Number(it.subtotal), 0) ?? Number(sale.total);

@@ -16,7 +16,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", requireRole("ADMIN"), async (req, res) => {
   const { name, nameEn, address } = req.body || {};
-  if (!name?.trim()) return res.status(400).json({ error: "اسم الفرع مطلوب" });
+  if (!name?.trim()) return res.status(400).json({ error: "Branch name is required", code: "BRANCH_NAME_REQUIRED" });
 
   const org = await prisma.organization.findUnique({
     where: { id: req.user.organizationId },
@@ -28,13 +28,11 @@ router.post("/", requireRole("ADMIN"), async (req, res) => {
   });
   if (count >= maxBranches) {
     return res.status(403).json({
-      error:
-        org?.plan === "PREMIUM"
-          ? `تم بلوغ الحد الأقصى للفروع (${maxBranches})`
-          : `الخطة الحالية تسمح بـ ${maxBranches} فروع فقط. رقِّ الخطة لإضافة المزيد.`,
+      error: `Branch limit reached (${count}/${maxBranches}). Upgrade the plan to add more branches.`,
       code: "BRANCH_LIMIT",
       maxBranches,
       branchCount: count,
+      plan: org?.plan || "FREE",
     });
   }
 
@@ -63,7 +61,7 @@ router.patch("/:id", requireRole("ADMIN"), async (req, res) => {
   const existing = await prisma.branch.findFirst({
     where: { id: req.params.id, organizationId: req.user.organizationId },
   });
-  if (!existing) return res.status(404).json({ error: "الفرع غير موجود" });
+  if (!existing) return res.status(404).json({ error: "Branch not found", code: "NOT_FOUND" });
   const data = {
     ...(name != null && { name: String(name).trim() }),
     ...(nameEn !== undefined && { nameEn: nameEn?.trim() || null }),
@@ -94,12 +92,12 @@ router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
   const existing = await prisma.branch.findFirst({
     where: { id: req.params.id, organizationId: orgId },
   });
-  if (!existing) return res.status(404).json({ error: "الفرع غير موجود" });
+  if (!existing) return res.status(404).json({ error: "Branch not found", code: "NOT_FOUND" });
 
   const branchCount = await prisma.branch.count({ where: { organizationId: orgId } });
   if (branchCount <= 1) {
     return res.status(400).json({
-      error: "لا يمكن حذف الفرع الوحيد في المؤسسة",
+      error: "Cannot delete the only branch in the organization",
       code: "LAST_BRANCH",
     });
   }
@@ -113,15 +111,15 @@ router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
   ]);
 
   const blockers = [];
-  if (sales) blockers.push(`${sales} مبيعات`);
-  if (users) blockers.push(`${users} مستخدمين مرتبطين`);
-  if (cashSessions) blockers.push(`${cashSessions} جلسات صندوق`);
-  if (refunds) blockers.push(`${refunds} مرتجعات`);
-  if (purchases) blockers.push(`${purchases} مشتريات`);
+  if (sales) blockers.push(`${sales} sale(s)`);
+  if (users) blockers.push(`${users} linked user(s)`);
+  if (cashSessions) blockers.push(`${cashSessions} cash session(s)`);
+  if (refunds) blockers.push(`${refunds} refund(s)`);
+  if (purchases) blockers.push(`${purchases} purchase(s)`);
 
   if (blockers.length) {
     return res.status(400).json({
-      error: `لا يمكن حذف الفرع لوجود بيانات مرتبطة: ${blockers.join("، ")}. انقل المستخدمين أو اختر فرعاً بلا معاملات.`,
+      error: `Cannot delete branch while related data exists: ${blockers.join(", ")}. Move users or choose a branch with no transactions.`,
       code: "BRANCH_HAS_DATA",
       blockers: { sales, users, cashSessions, refunds, purchases },
     });

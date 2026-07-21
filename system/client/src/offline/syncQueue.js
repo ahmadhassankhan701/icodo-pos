@@ -19,11 +19,18 @@ export async function enqueue(type, clientMutationId, payload) {
     createdAt: Date.now(),
     retryCount: 0,
     lastError: null,
+    status: "pending",
   });
 }
 
 export async function getPendingQueueCount() {
-  return db.syncQueue.count();
+  const rows = await db.syncQueue.toArray();
+  return rows.filter((r) => r.status !== "failed").length;
+}
+
+export async function getFailedQueueCount() {
+  const rows = await db.syncQueue.toArray();
+  return rows.filter((r) => r.status === "failed").length;
 }
 
 /**
@@ -39,6 +46,18 @@ export async function enqueueStockPatch(clientMutationId, fields) {
 }
 
 /**
+ * إعادة محاولة عنصر فشل نهائياً
+ * @param {number} localId
+ */
+export async function retrySyncQueueItem(localId) {
+  await db.syncQueue.update(localId, {
+    status: "pending",
+    retryCount: 0,
+    lastError: null,
+  });
+}
+
+/**
  * يعالج الطابور بالتسلسل — يُستدعى عند عودة الاتصال أو يدوياً.
  * @returns {number} عدد العناصر المُعالجة بنجاح
  */
@@ -46,6 +65,7 @@ export async function processSyncQueue() {
   const rows = await db.syncQueue.orderBy("createdAt").toArray();
   let ok = 0;
   for (const row of rows) {
+    if (row.status === "failed") continue;
     try {
       const body = { ...row.payload, clientMutationId: row.clientMutationId };
       if (row.type === SYNC_TYPES.SALE) {
@@ -56,7 +76,10 @@ export async function processSyncQueue() {
         await api("/api/inventory/offline-upsert", { method: "POST", body });
       } else {
         console.warn("[sync] نوع غير معروف:", row.type);
-        await db.syncQueue.delete(row.localId);
+        await db.syncQueue.update(row.localId, {
+          status: "failed",
+          lastError: `unknown type: ${row.type}`,
+        });
         continue;
       }
       await db.syncQueue.delete(row.localId);
@@ -70,12 +93,18 @@ export async function processSyncQueue() {
       const msg = e instanceof Error ? e.message : String(e);
       const nextRetry = (row.retryCount ?? 0) + 1;
       if (nextRetry >= MAX_RETRY) {
-        await db.syncQueue.delete(row.localId);
-        console.error("[sync] أُهملت مهمة بعد المحاولات:", row.clientMutationId, msg);
+        await db.syncQueue.update(row.localId, {
+          retryCount: nextRetry,
+          lastError: msg,
+          status: "failed",
+          failedAt: Date.now(),
+        });
+        console.error("[sync] مهمة فشلت بعد المحاولات (محفوظة للمراجعة):", row.clientMutationId, msg);
       } else {
         await db.syncQueue.update(row.localId, {
           retryCount: nextRetry,
           lastError: msg,
+          status: "pending",
         });
       }
     }

@@ -5,13 +5,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 
-const inp = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid var(--border)",
-  background: "var(--bg)",
-  color: "var(--text)",
-};
+const emptyForm = () => ({ name: "", phone: "", email: "", notes: "", accountBalance: "" });
 
 export default function Customers() {
   const { t } = useI18n();
@@ -19,7 +13,7 @@ export default function Customers() {
   const showReceivable = isVerticalFeatureEnabled("customerAccounts", user?.businessVertical);
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
-  const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "" });
+  const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState("");
 
@@ -37,8 +31,18 @@ export default function Customers() {
     e.preventDefault();
     setMsg("");
     try {
-      await api("/api/customers", { method: "POST", body: form });
-      setForm({ name: "", phone: "", email: "", notes: "" });
+      const balRaw = String(form.accountBalance ?? "").trim();
+      await api("/api/customers", {
+        method: "POST",
+        body: {
+          name: form.name,
+          phone: form.phone,
+          email: form.email,
+          notes: form.notes,
+          ...(balRaw !== "" ? { accountBalance: Number(balRaw.replace(",", ".")) } : {}),
+        },
+      });
+      setForm(emptyForm());
       await load();
       setMsg(t("customers.created"));
     } catch (x) {
@@ -51,6 +55,7 @@ export default function Customers() {
     if (!editing) return;
     setMsg("");
     try {
+      const balRaw = String(editing.accountBalance ?? "").trim();
       await api(`/api/customers/${editing.id}`, {
         method: "PATCH",
         body: {
@@ -58,6 +63,7 @@ export default function Customers() {
           phone: editing.phone || null,
           email: editing.email || null,
           notes: editing.notes || null,
+          accountBalance: Number(String(balRaw).replace(",", ".") || "0"),
         },
       });
       setEditing(null);
@@ -80,148 +86,172 @@ export default function Customers() {
     }
   };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ margin: 0 }}>{t("customers.title")}</h1>
+  const colCount = 5 + (showReceivable ? 1 : 0) + (isManager ? 1 : 0);
 
-      <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+  return (
+    <div className="customers-page">
+      <h1 className="customers-page__title">{t("customers.title")}</h1>
+
+      <div className="card customers-search">
         <input
           placeholder={t("customers.search")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, flex: 1, minWidth: 200 }}
+          aria-label={t("customers.search")}
         />
       </div>
 
-      <form className="card" onSubmit={create} style={{ display: "grid", gap: 10 }}>
+      <form className="card customers-form" onSubmit={create}>
         <strong>{t("customers.quickAdd")}</strong>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+        <div className="customers-form__grid">
           <input
             placeholder={t("customers.name")}
             required
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            style={inp}
           />
           <input
             placeholder={t("customers.phone")}
             value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            style={inp}
           />
           <input
             placeholder={t("customers.email")}
             type="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
-            style={inp}
+          />
+          <input
+            placeholder={t("customers.balancePlaceholder")}
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.accountBalance}
+            onChange={(e) => setForm({ ...form, accountBalance: e.target.value })}
           />
           <input
             placeholder={t("customers.notes")}
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            style={inp}
           />
         </div>
-        <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 200 }}>
+        <button type="submit" className="btn-touch customers-form__submit">
           {t("common.add")}
         </button>
       </form>
 
-      {msg ? <div style={{ color: "var(--muted)" }}>{msg}</div> : null}
+      {msg ? <div className="customers-msg">{msg}</div> : null}
 
-      <div className="card" style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      <div className="card customers-table-wrap">
+        <table className="customers-table">
           <thead>
-            <tr style={{ color: "var(--muted)", textAlign: "start" }}>
-              <th style={th}>{t("customers.name")}</th>
-              <th style={th}>{t("customers.phone")}</th>
-              <th style={th}>{t("customers.colBalance")}</th>
-              <th style={th}>{t("customers.email")}</th>
-              <th style={th}>{t("customers.notes")}</th>
-              {showReceivable ? <th style={th}>{t("customers.receivable")}</th> : null}
-              {isManager ? <th style={th} /> : null}
+            <tr>
+              <th>{t("customers.name")}</th>
+              <th>{t("customers.phone")}</th>
+              <th>{t("customers.colBalance")}</th>
+              <th>{t("customers.email")}</th>
+              <th>{t("customers.notes")}</th>
+              {showReceivable ? <th>{t("customers.receivable")}</th> : null}
+              {isManager ? <th>{t("products.colActions")}</th> : null}
             </tr>
           </thead>
           <tbody>
-            {list.map((c) =>
-              editing?.id === c.id ? (
-                <tr key={c.id}>
-                  <td style={td}>
-                    <input
-                      value={editing.name}
-                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                      style={inp}
-                    />
-                  </td>
-                  <td style={td}>
-                    <input
-                      value={editing.phone || ""}
-                      onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
-                      style={inp}
-                    />
-                  </td>
-                  <td style={td}>—</td>
-                  <td style={td}>
-                    <input
-                      value={editing.email || ""}
-                      onChange={(e) => setEditing({ ...editing, email: e.target.value })}
-                      style={inp}
-                    />
-                  </td>
-                  <td style={td}>
-                    <input
-                      value={editing.notes || ""}
-                      onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
-                      style={inp}
-                    />
-                  </td>
-                  {showReceivable ? <td style={td}>—</td> : null}
-                  {isManager ? (
-                    <td style={td}>
-                      <form onSubmit={saveEdit} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff" }}>
-                          {t("common.save")}
-                        </button>
-                        <button type="button" className="btn-touch" onClick={() => setEditing(null)}>
-                          {t("common.cancel")}
-                        </button>
-                      </form>
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={colCount} className="customers-table__empty">
+                  {t("customers.empty") || "—"}
+                </td>
+              </tr>
+            ) : (
+              list.map((c) =>
+                editing?.id === c.id ? (
+                  <tr key={c.id}>
+                    <td>
+                      <input
+                        value={editing.name}
+                        onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                      />
                     </td>
-                  ) : null}
-                </tr>
-              ) : (
-                <tr key={c.id}>
-                  <td style={td}>{c.name}</td>
-                  <td style={td}>{c.phone || "—"}</td>
-                  <td style={td}>{Number(c.accountBalance ?? 0).toFixed(2)}</td>
-                  <td style={td}>{c.email || "—"}</td>
-                  <td style={td}>{c.notes || "—"}</td>
-                  {showReceivable ? (
-                    <td style={td}>
-                      <Link to={`/customer-accounts/${c.id}`} style={{ fontSize: 13 }}>
-                        {t("receivable.open")}
-                      </Link>
+                    <td>
+                      <input
+                        value={editing.phone || ""}
+                        onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                      />
                     </td>
-                  ) : null}
-                  {isManager ? (
-                    <td style={td}>
-                      <button type="button" className="btn-touch" onClick={() => setEditing({ ...c })}>
-                        {t("common.edit")}
-                      </button>
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          className="btn-touch"
-                          onClick={() => del(c.id)}
-                          style={{ marginInlineStart: 8, color: "var(--danger)" }}
-                        >
-                          {t("common.delete")}
-                        </button>
-                      ) : null}
+                    <td>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={editing.accountBalance}
+                        onChange={(e) => setEditing({ ...editing, accountBalance: e.target.value })}
+                      />
                     </td>
-                  ) : null}
-                </tr>
+                    <td>
+                      <input
+                        value={editing.email || ""}
+                        onChange={(e) => setEditing({ ...editing, email: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={editing.notes || ""}
+                        onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
+                      />
+                    </td>
+                    {showReceivable ? <td>—</td> : null}
+                    {isManager ? (
+                      <td>
+                        <form onSubmit={saveEdit} className="customers-table__btns">
+                          <button type="submit" className="btn-touch customers-btn-save">
+                            {t("common.save")}
+                          </button>
+                          <button type="button" className="btn-touch" onClick={() => setEditing(null)}>
+                            {t("common.cancel")}
+                          </button>
+                        </form>
+                      </td>
+                    ) : null}
+                  </tr>
+                ) : (
+                  <tr key={c.id}>
+                    <td>{c.name}</td>
+                    <td>{c.phone || "—"}</td>
+                    <td className="customers-table__bal">{Number(c.accountBalance ?? 0).toFixed(2)}</td>
+                    <td>{c.email || "—"}</td>
+                    <td>{c.notes || "—"}</td>
+                    {showReceivable ? (
+                      <td>
+                        <Link to={`/customer-accounts/${c.id}`} className="customers-details">
+                          {t("receivable.open")}
+                        </Link>
+                      </td>
+                    ) : null}
+                    {isManager ? (
+                      <td>
+                        <div className="customers-table__btns">
+                          <button
+                            type="button"
+                            className="btn-touch"
+                            onClick={() =>
+                              setEditing({
+                                ...c,
+                                accountBalance: Number(c.accountBalance ?? 0).toFixed(2),
+                              })
+                            }
+                          >
+                            {t("common.edit")}
+                          </button>
+                          {isAdmin ? (
+                            <button type="button" className="btn-touch customers-btn-del" onClick={() => del(c.id)}>
+                              {t("common.delete")}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    ) : null}
+                  </tr>
+                )
               )
             )}
           </tbody>
@@ -230,6 +260,3 @@ export default function Customers() {
     </div>
   );
 }
-
-const th = { padding: "8px 6px", borderBottom: "1px solid var(--border)" };
-const td = { padding: "8px 6px", borderBottom: "1px solid var(--border)", verticalAlign: "top" };

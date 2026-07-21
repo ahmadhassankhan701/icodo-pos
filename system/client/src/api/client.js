@@ -21,9 +21,10 @@ export async function api(path, options = {}) {
     data = text;
   }
   if (!res.ok) {
-    const err = new Error(data?.error || res.statusText || "طلب فاشل");
+    const err = new Error(data?.error || res.statusText || "Request failed");
     err.status = res.status;
     err.data = data;
+    err.code = data?.code;
     throw err;
   }
   return data;
@@ -43,9 +44,10 @@ export async function apiBlob(path) {
     } catch {
       data = { error: text };
     }
-    const err = new Error(data?.error || res.statusText || "فشل التنزيل");
+    const err = new Error(data?.error || res.statusText || "Download failed");
     err.status = res.status;
     err.data = data;
+    err.code = data?.code;
     throw err;
   }
   return res.blob();
@@ -72,9 +74,10 @@ export async function apiUploadExcel(path, file, branchId) {
     data = { error: text };
   }
   if (!res.ok) {
-    const err = new Error(data?.error || res.statusText || "فشل الرفع");
+    const err = new Error(data?.error || res.statusText || "Upload failed");
     err.status = res.status;
     err.data = data;
+    err.code = data?.code;
     throw err;
   }
   return data;

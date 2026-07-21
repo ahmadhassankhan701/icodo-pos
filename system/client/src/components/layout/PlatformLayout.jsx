@@ -1,18 +1,23 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { IcodoLogo } from "../../marketing/IcodoLogo.jsx";
 
+/** Platform admin console — English only for now. */
 export function PlatformLayout() {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { t, locale, setLocale } = useI18n();
   const nav = useNavigate();
 
+  useEffect(() => {
+    if (locale !== "en") setLocale("en");
+  }, [locale, setLocale]);
+
   return (
-    <div className="app-layout-shell">
+    <div className="app-layout-shell" lang="en" dir="ltr">
       <aside className="app-sidebar" aria-label={t("platform.title")}>
         <div className="app-sidebar-header">
           <div className="app-sidebar-brand">
@@ -39,17 +44,8 @@ export function PlatformLayout() {
         <header className="app-topbar">
           <div style={{ fontSize: 13, color: "var(--muted)", flex: "1 1 auto" }}>
             {t("nav.platform")}
+            <span style={{ marginInlineStart: 8, opacity: 0.7 }}· English</span>
           </div>
-          <button
-            type="button"
-            className="btn-touch"
-            onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-            title={t("lang.switch")}
-            aria-label={t("lang.switch")}
-            style={{ background: "var(--surface2)", color: "var(--text)", minWidth: 44 }}
-          >
-            {locale === "ar" ? t("lang.en") : t("lang.ar")}
-          </button>
           <button
             type="button"
             className="btn-touch"

@@ -258,7 +258,7 @@ export default function Categories() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 860, width: "100%", marginInline: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
       <h1 style={{ margin: 0 }}>{t("catalog.title")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("catalog.hint")}</p>
 

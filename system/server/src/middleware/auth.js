@@ -59,7 +59,11 @@ export function requirePermission(...keys) {
 
       for (const key of keys) {
         if (!hasPermission(req._rolePermissions, key)) {
-          return res.status(403).json({ error: "صلاحية غير كافية لهذا الإجراء" });
+          return res.status(403).json({
+            error: "Insufficient permission for this action",
+            code: "FORBIDDEN",
+            permission: key,
+          });
         }
       }
       next();

@@ -118,6 +118,15 @@ Open http://localhost:5173
 
 **Change these before any real deployment.**
 
+## Pilot ops
+
+See **[docs/PILOT_OPS.md](docs/PILOT_OPS.md)** for permissions defaults, plan branch limits, backup/restore, and the pilot support checklist.
+
+```bash
+chmod +x scripts/backup-db.sh
+./scripts/backup-db.sh
+```
+
 ## Project structure
 
 ```

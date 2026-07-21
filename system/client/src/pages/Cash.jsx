@@ -109,41 +109,45 @@ export default function Cash() {
       {isManager ? (
         <>
           {!openSession ? (
-            <form className="card" onSubmit={openShift} style={{ display: "grid", gap: 10, maxWidth: 400 }}>
+            <form className="card" onSubmit={openShift} style={{ display: "grid", gap: 12 }}>
               <strong>{t("cash.openForm")}</strong>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("cash.openingFloat")}</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={openingFloat}
-                  onChange={(e) => setOpeningFloat(e.target.value)}
-                  style={inp}
-                />
-              </label>
+              <div className="page-form-grid">
+                <label className="page-form-field">
+                  <span>{t("cash.openingFloat")}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={openingFloat}
+                    onChange={(e) => setOpeningFloat(e.target.value)}
+                    style={inp}
+                  />
+                </label>
+              </div>
               <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 220 }}>
                 {t("cash.openBtn")}
               </button>
             </form>
           ) : (
-            <form className="card" onSubmit={closeShift} style={{ display: "grid", gap: 10, maxWidth: 400 }}>
+            <form className="card" onSubmit={closeShift} style={{ display: "grid", gap: 12 }}>
               <strong>{t("cash.closeForm")}</strong>
               <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>{t("cash.closeHint")}</p>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("cash.countedCash")}</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  required
-                  value={closingCounted}
-                  onChange={(e) => setClosingCounted(e.target.value)}
-                  style={inp}
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("returns.note")}</span>
-                <input value={closeNote} onChange={(e) => setCloseNote(e.target.value)} style={inp} />
-              </label>
+              <div className="page-form-grid">
+                <label className="page-form-field">
+                  <span>{t("cash.countedCash")}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    value={closingCounted}
+                    onChange={(e) => setClosingCounted(e.target.value)}
+                    style={inp}
+                  />
+                </label>
+                <label className="page-form-field">
+                  <span>{t("returns.note")}</span>
+                  <input value={closeNote} onChange={(e) => setCloseNote(e.target.value)} style={inp} />
+                </label>
+              </div>
               <button type="submit" className="btn-touch" style={{ background: "var(--warning)", color: "#111", maxWidth: 220 }}>
                 {t("cash.closeBtn")}
               </button>

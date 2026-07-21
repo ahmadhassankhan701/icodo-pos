@@ -16,6 +16,7 @@ export default function HrPayrollPeriod() {
     deductionsTotal: "0",
     loanDeduction: "0",
   });
+  const [notesDraft, setNotesDraft] = useState("");
 
   const load = useCallback(async () => {
     if (!periodId) return;
@@ -26,6 +27,7 @@ export default function HrPayrollPeriod() {
         api("/api/employees"),
       ]);
       setPeriod(p);
+      setNotesDraft(p.notes || "");
       setEmployees(em.filter((e) => e.status === "ACTIVE"));
     } catch (e) {
       setMsg(e.message || t("hr.loadError"));
@@ -107,6 +109,30 @@ export default function HrPayrollPeriod() {
     }
   };
 
+  const saveNotes = async () => {
+    setMsg("");
+    try {
+      await api(`/api/payroll/periods/${periodId}`, {
+        method: "PATCH",
+        body: { notes: notesDraft },
+      });
+      await load();
+    } catch (e) {
+      setMsg(e.message || t("hr.saveError"));
+    }
+  };
+
+  const deleteLine = async (line) => {
+    if (!window.confirm(t("hr.confirmDeleteLine"))) return;
+    setMsg("");
+    try {
+      await api(`/api/payroll/periods/${periodId}/lines/${line.id}`, { method: "DELETE" });
+      await load();
+    } catch (e) {
+      setMsg(e.message || t("hr.saveError"));
+    }
+  };
+
   if (!period) {
     return (
       <div>
@@ -130,6 +156,25 @@ export default function HrPayrollPeriod() {
         {period.year} / {period.month} — {period.status}
       </h2>
       {msg ? <p style={{ color: "var(--danger, #c62828)" }}>{msg}</p> : null}
+
+      {draft ? (
+        <div style={{ display: "grid", gap: 8, marginBottom: 16, maxWidth: 520 }}>
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 13, color: "var(--muted)" }}>{t("hr.notes")}</span>
+            <textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              rows={2}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid var(--border)" }}
+            />
+          </label>
+          <button type="button" className="btn-touch" style={{ maxWidth: 200 }} onClick={saveNotes}>
+            {t("hr.saveNotes")}
+          </button>
+        </div>
+      ) : period.notes ? (
+        <p style={{ color: "var(--muted)", fontSize: 14 }}>{period.notes}</p>
+      ) : null}
 
       {draft ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
@@ -156,7 +201,6 @@ export default function HrPayrollPeriod() {
             gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
             gap: 8,
             marginBottom: 16,
-            maxWidth: 640,
             alignItems: "end",
           }}
         >
@@ -193,6 +237,7 @@ export default function HrPayrollPeriod() {
               <th>{t("hr.deductions")}</th>
               <th>{t("hr.loanDed")}</th>
               <th>{t("hr.net")}</th>
+              {draft ? <th /> : null}
             </tr>
           </thead>
           <tbody>
@@ -258,6 +303,18 @@ export default function HrPayrollPeriod() {
                   )}
                 </td>
                 <td>{Number(line.netAmount).toFixed(2)}</td>
+                {draft ? (
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-touch"
+                      style={{ background: "var(--danger)", color: "#fff" }}
+                      onClick={() => deleteLine(line)}
+                    >
+                      {t("common.delete")}
+                    </button>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

@@ -33,6 +33,9 @@ import SyncQueueStatus from "./pages/SyncQueueStatus.jsx";
 import Alerts from "./pages/Alerts.jsx";
 import Settings from "./pages/Settings.jsx";
 import LoyaltyCoupons from "./pages/LoyaltyCoupons.jsx";
+import Plan from "./pages/Plan.jsx";
+import SalesHistory from "./pages/SalesHistory.jsx";
+import InventoryLots from "./pages/InventoryLots.jsx";
 const loadReports = () => import("./pages/Reports.jsx");
 const loadAppointments = () => import("./pages/Appointments.jsx");
 const loadAccounting = () => import("./pages/Accounting.jsx");
@@ -63,7 +66,7 @@ const PlatformLayout = React.lazy(loadPlatformLayout);
 const PlatformOrganizations = React.lazy(loadPlatformOrganizations);
 const PlatformUsers = React.lazy(loadPlatformUsers);
 
-function Protected({ children, roles, permission }) {
+function Protected({ children, roles, permission, anyPermission }) {
   const { user, loading, can } = useAuth();
   const { t } = useI18n();
   if (loading) {
@@ -80,6 +83,10 @@ function Protected({ children, roles, permission }) {
     }
     if (permission && !can(permission)) {
       return <Navigate to="/dashboard" replace />;
+    }
+    if (Array.isArray(anyPermission) && anyPermission.length > 0) {
+      const ok = anyPermission.some((key) => can(key));
+      if (!ok) return <Navigate to="/dashboard" replace />;
     }
   }
   return children;
@@ -193,6 +200,14 @@ export default function App() {
           <Route path="/sync-queue" element={<SyncQueueStatus />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route
+            path="/sales"
+            element={
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} anyPermission={["pos", "reports"]}>
+                <SalesHistory />
+              </Protected>
+            }
+          />
           <Route path="/settings" element={<Settings />} />
           <Route path="/print-settings" element={<Navigate to="/settings" replace />} />
           <Route
@@ -286,6 +301,16 @@ export default function App() {
             }
           />
           <Route
+            path="/inventory-lots"
+            element={
+              <Protected permission="productsView">
+                <VerticalFeatureGate feature="lotsExpiry">
+                  <InventoryLots />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
             path="/categories"
             element={
               <Protected permission="catalogEdit">
@@ -293,21 +318,32 @@ export default function App() {
               </Protected>
             }
           />
-          <Route path="/customers" element={<Customers />} />
+          <Route
+            path="/customers"
+            element={
+              <Protected permission="customers">
+                <Customers />
+              </Protected>
+            }
+          />
           <Route
             path="/customer-accounts"
             element={
-              <VerticalFeatureGate feature="customerAccounts">
-                <CustomerReceivables />
-              </VerticalFeatureGate>
+              <Protected permission="receivables">
+                <VerticalFeatureGate feature="customerAccounts">
+                  <CustomerReceivables />
+                </VerticalFeatureGate>
+              </Protected>
             }
           />
           <Route
             path="/customer-accounts/:customerId"
             element={
-              <VerticalFeatureGate feature="customerAccounts">
-                <CustomerAccountDetail />
-              </VerticalFeatureGate>
+              <Protected permission="receivables">
+                <VerticalFeatureGate feature="customerAccounts">
+                  <CustomerAccountDetail />
+                </VerticalFeatureGate>
+              </Protected>
             }
           />
           <Route
@@ -387,6 +423,14 @@ export default function App() {
             element={
               <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="audit">
                 <Audit />
+              </Protected>
+            }
+          />
+          <Route
+            path="/plan"
+            element={
+              <Protected roles={["ADMIN"]}>
+                <Plan />
               </Protected>
             }
           />

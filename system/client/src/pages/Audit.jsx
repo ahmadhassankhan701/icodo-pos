@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
-import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 export default function Audit() {
   const { t } = useI18n();
-  const { user } = useAuth();
   const branchId = useActiveBranchId();
   const [rows, setRows] = useState([]);
 
@@ -33,32 +31,37 @@ export default function Audit() {
       </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <table className="audit-table">
           <thead>
-            <tr style={{ color: "var(--muted)", textAlign: "start" }}>
-              <th style={th}>{t("returns.colDate")}</th>
-              <th style={th}>{t("audit.action")}</th>
-              <th style={th}>{t("audit.user")}</th>
-              <th style={th}>{t("audit.summary")}</th>
+            <tr>
+              <th>{t("returns.colDate")}</th>
+              <th>{t("audit.action")}</th>
+              <th>{t("audit.user")}</th>
+              <th>{t("audit.summary")}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td style={td}>{new Date(r.createdAt).toLocaleString()}</td>
-                <td style={td}>
-                  <code style={{ fontSize: 12 }}>{r.action}</code>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="audit-table__empty">
+                  {t("audit.empty") || "—"}
                 </td>
-                <td style={td}>{r.user?.name || r.user?.email || "—"}</td>
-                <td style={td}>{r.summary || "—"}</td>
               </tr>
-            ))}
+            ) : (
+              rows.map((r) => (
+                <tr key={r.id}>
+                  <td className="audit-table__date">{new Date(r.createdAt).toLocaleString()}</td>
+                  <td>
+                    <code className="audit-table__action">{r.action}</code>
+                  </td>
+                  <td>{r.user?.name || r.user?.email || "—"}</td>
+                  <td>{r.summary || "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
-
-const th = { padding: "8px 6px", borderBottom: "1px solid var(--border)" };
-const td = { padding: "8px 6px", borderBottom: "1px solid var(--border)", verticalAlign: "top" };

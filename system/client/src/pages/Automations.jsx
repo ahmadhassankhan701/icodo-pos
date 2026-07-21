@@ -99,6 +99,21 @@ export default function Automations() {
     }
   };
 
+  const deleteRule = async (id) => {
+    if (!window.confirm(t("automations.deleteConfirm"))) return;
+    setLoading(true);
+    setMsg("");
+    try {
+      await api(`/api/automations/${id}`, { method: "DELETE" });
+      await loadAll();
+      setMsg(t("automations.msgDeleted"));
+    } catch (x) {
+      setMsg(x.message || t("automations.msgCreateFail"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <h1 style={{ margin: 0 }}>{t("automations.title")}</h1>
@@ -185,6 +200,15 @@ export default function Automations() {
                       </button>
                       <button type="button" className="btn-touch" onClick={() => toggleRule(r)} disabled={loading}>
                         {r.active ? t("commissions.disable") : t("commissions.enable")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-touch"
+                        onClick={() => deleteRule(r.id)}
+                        disabled={loading}
+                        style={{ background: "var(--danger)", color: "#fff" }}
+                      >
+                        {t("common.delete")}
                       </button>
                     </div>
                   </td>

@@ -18,6 +18,7 @@ system/server/prisma/*.db-journal
 system/.vercel
 **/.DS_Store
 Thumbs.db
+backups/
 
 .vercel
 .env*.local

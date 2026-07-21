@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
-import { BUSINESS_VERTICAL_IDS } from "../lib/businessVerticalIds.js";
+import { BUSINESS_VERTICAL_IDS, isMvpVerticalEnabled } from "../lib/businessVerticalIds.js";
 import { BusinessVerticalIcon } from "../lib/businessVerticalIcons.jsx";
 import { AuthShell } from "../marketing/AuthShell.jsx";
 import { useMarketingCopy } from "../marketing/copy.js";
@@ -76,6 +76,10 @@ export default function Register() {
       setErr(t("register.verticalRequired"));
       return;
     }
+    if (!isMvpVerticalEnabled(businessVertical)) {
+      setErr(t("register.mvpVerticalHint"));
+      return;
+    }
     setStep(2);
   };
 
@@ -129,39 +133,51 @@ export default function Register() {
         {step === 1 ? (
           <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
             <legend style={{ fontWeight: 600, marginBottom: 8 }}>{t("register.verticalSection")}</legend>
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--mkt-muted)", lineHeight: 1.4 }}>
+              {t("register.mvpVerticalHint")}
+            </p>
             <div style={btnGrid}>
-              {BUSINESS_VERTICAL_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setBusinessVertical(id)}
-                  aria-pressed={businessVertical === id}
-                  style={{
-                    minHeight: 72,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    padding: "10px 8px",
-                    fontSize: 12,
-                    lineHeight: 1.25,
-                    textAlign: "center",
-                    borderRadius: "0.65rem",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    border:
-                      businessVertical === id
+              {BUSINESS_VERTICAL_IDS.map((id) => {
+                const enabled = isMvpVerticalEnabled(id);
+                const selected = businessVertical === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={!enabled}
+                    onClick={() => enabled && setBusinessVertical(id)}
+                    aria-pressed={selected}
+                    title={enabled ? undefined : t("register.comingSoon")}
+                    style={{
+                      minHeight: 72,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      padding: "10px 8px",
+                      fontSize: 12,
+                      lineHeight: 1.25,
+                      textAlign: "center",
+                      borderRadius: "0.65rem",
+                      cursor: enabled ? "pointer" : "not-allowed",
+                      fontFamily: "inherit",
+                      opacity: enabled ? 1 : 0.45,
+                      border: selected
                         ? "2px solid var(--mkt-blue)"
                         : "1px solid var(--mkt-line)",
-                    background: businessVertical === id ? "color-mix(in srgb, var(--mkt-sky) 18%, #fff)" : "#fff",
-                    color: "var(--mkt-ink)",
-                  }}
-                >
-                  <BusinessVerticalIcon id={id} size={22} color="#0f172a" />
-                  <span>{t(`register.vertical.${id}`)}</span>
-                </button>
-              ))}
+                      background: selected ? "color-mix(in srgb, var(--mkt-sky) 18%, #fff)" : "#fff",
+                      color: "var(--mkt-ink)",
+                    }}
+                  >
+                    <BusinessVerticalIcon id={id} size={22} color="#0f172a" />
+                    <span>{t(`register.vertical.${id}`)}</span>
+                    {!enabled ? (
+                      <span style={{ fontSize: 10, color: "var(--mkt-muted)" }}>{t("register.comingSoon")}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           </fieldset>
         ) : null}

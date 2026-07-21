@@ -133,6 +133,16 @@ export function SidebarIcon({ name, size = 18 }) {
           <path d="M9 12.5h6" />
         </svg>
       );
+    case "plan":
+      return (
+        <svg {...props}>
+          <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
+          <path d="M3.5 9.5h17" />
+          <path d="M7.5 14h4" />
+          <path d="M15.5 13.5v3" />
+          <path d="M14 15h3" />
+        </svg>
+      );
     case "admin":
       return (
         <svg {...props}>
@@ -177,6 +187,127 @@ export function SidebarIcon({ name, size = 18 }) {
           <path d="M10 5H6a2 2 0 00-2 2v10a2 2 0 002 2h4" />
           <path d="M15 16l4-4-4-4" />
           <path d="M19 12H10" />
+        </svg>
+      );
+    case "reports":
+      return (
+        <svg {...props}>
+          <path d="M4 19V5" />
+          <path d="M4 19h16" />
+          <path d="M8 16l3-5 3 3 4-7" />
+        </svg>
+      );
+    case "sales":
+      return (
+        <svg {...props}>
+          <path d="M6 7h12l-1 11H7L6 7z" />
+          <path d="M9 7V5.5A3 3 0 0115 5.5V7" />
+        </svg>
+      );
+    case "wholesale":
+      return (
+        <svg {...props}>
+          <path d="M3 8l9-4 9 4-9 4-9-4z" />
+          <path d="M3 12l9 4 9-4" />
+          <path d="M3 16l9 4 9-4" />
+        </svg>
+      );
+    case "purchases":
+      return (
+        <svg {...props}>
+          <path d="M4 7h16v12H4z" />
+          <path d="M8 7V5h8v2" />
+          <path d="M8 12h8" />
+        </svg>
+      );
+    case "transfer":
+      return (
+        <svg {...props}>
+          <path d="M7 7h11l-3-3" />
+          <path d="M17 17H6l3 3" />
+          <path d="M18 7v4M6 17v-4" />
+        </svg>
+      );
+    case "count":
+      return (
+        <svg {...props}>
+          <rect x="4" y="4" width="7" height="7" rx="1.5" />
+          <rect x="13" y="4" width="7" height="7" rx="1.5" />
+          <rect x="4" y="13" width="7" height="7" rx="1.5" />
+          <path d="M14 16.5h5M16.5 14v5" />
+        </svg>
+      );
+    case "returns":
+      return (
+        <svg {...props}>
+          <path d="M9 7H5v4" />
+          <path d="M5 11a7 7 0 101.5-4.5" />
+        </svg>
+      );
+    case "appointments":
+      return (
+        <svg {...props}>
+          <rect x="4" y="5" width="16" height="15" rx="2" />
+          <path d="M8 3v4M16 3v4M4 10h16" />
+        </svg>
+      );
+    case "delivery":
+      return (
+        <svg {...props}>
+          <path d="M3 8h11v8H3z" />
+          <path d="M14 11h4l3 3v2h-7" />
+          <circle cx="7" cy="17.5" r="1.5" />
+          <circle cx="17" cy="17.5" r="1.5" />
+        </svg>
+      );
+    case "business":
+      return (
+        <svg {...props}>
+          <path d="M4 20V9l8-5 8 5v11" />
+          <path d="M9 20v-5h6v5" />
+        </svg>
+      );
+    case "accounting":
+      return (
+        <svg {...props}>
+          <rect x="5" y="3" width="14" height="18" rx="2" />
+          <path d="M9 8h6M9 12h6M9 16h4" />
+        </svg>
+      );
+    case "zakat":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7v10M9 9.5c1.5-1 4.5-1 6 0M9 14.5c1.5 1 4.5 1 6 0" />
+        </svg>
+      );
+    case "commissions":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7v2M12 15v2M9.5 10.5c.6-.8 1.6-1.2 2.5-1.2 1.4 0 2.5.8 2.5 2s-1.1 2-2.5 2c-.9 0-1.9-.4-2.5-1.2" />
+        </svg>
+      );
+    case "automations":
+      return (
+        <svg {...props}>
+          <path d="M12 3v3M12 18v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1l2.1-2.1M17 7l2.1-2.1" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      );
+    case "hr":
+      return (
+        <svg {...props}>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3.5 19c.6-3 2.7-4.8 5.5-4.8" />
+          <path d="M15 11l2 2 4-4" />
+        </svg>
+      );
+    case "websiteSync":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M3 12h18M12 4a14 14 0 010 16M12 4a14 14 0 000 16" />
         </svg>
       );
     case "chevron":

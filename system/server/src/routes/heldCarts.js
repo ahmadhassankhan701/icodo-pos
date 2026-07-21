@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { unitPriceDecimalForSale } from "../lib/productPricing.js";
+import { resolveLineModifiers } from "../lib/productModifiers.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -28,15 +29,24 @@ async function normalizeCartPayload(db, organizationId, branchId, rawItems, useW
     const want = Math.max(1, Math.floor(Number(line.quantity) || 1));
     const qty = Math.min(want, stock);
     if (qty < 1) continue;
-    const unitDec = unitPriceDecimalForSale(product, useWholesale);
+    const { selected, delta } = resolveLineModifiers(
+      product,
+      line.modifiers || line.modifierKeys
+    );
+    const base = Number(unitPriceDecimalForSale(product, useWholesale));
+    const unitPrice = Math.round((base + delta) * 100) / 100;
     out.push({
       productId: product.id,
       name: product.name,
       nameEn: product.nameEn,
       imageUrl: product.imageUrl,
-      unitPrice: Number(unitDec),
+      unitPrice,
       quantity: qty,
       maxStock: stock,
+      modifiers: selected.length ? selected : undefined,
+      lineKey: selected.length
+        ? `${product.id}::${selected.map((m) => m.key).sort().join(",")}`
+        : product.id,
     });
   }
   if (!out.length) throw new Error("لا توجد أصناف صالحة أو المخزون غير كافٍ");

@@ -11,7 +11,95 @@ import { calendarDaysUntilExpiryUTC } from "../lib/productExpiry.js";
 const router = Router();
 router.use(authMiddleware);
 
-/** منتجات منتهية الصلاحية أو تنتهي اليوم */
+/** Browse inventory lots across products — ?branchId=&q=&inStock=1&withinDays= */
+router.get("/lots", requirePermission("productsView"), async (req, res) => {
+  try {
+    const orgId = req.user.organizationId;
+    const branchId =
+      req.query.branchId != null && String(req.query.branchId).trim()
+        ? String(req.query.branchId).trim()
+        : req.user.branchId || null;
+    if (
+      req.user.role !== "ADMIN" &&
+      req.user.branchId &&
+      branchId &&
+      req.user.branchId !== branchId
+    ) {
+      return res.status(403).json({ error: "غير مصرح لهذا الفرع" });
+    }
+    const q = req.query.q != null ? String(req.query.q).trim() : "";
+    const inStockOnly = String(req.query.inStock ?? "1") !== "0";
+    const withinRaw = Number.parseInt(String(req.query.withinDays ?? ""), 10);
+    const withinDays = Number.isFinite(withinRaw)
+      ? Math.max(0, Math.min(365, withinRaw))
+      : null;
+
+    const where = {
+      organizationId: orgId,
+      ...(branchId ? { branchId } : {}),
+      ...(inStockOnly ? { quantityOnHand: { gt: 0 } } : {}),
+      ...(q
+        ? {
+            product: {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { nameEn: { contains: q, mode: "insensitive" } },
+                { sku: { contains: q, mode: "insensitive" } },
+                { barcode: { contains: q, mode: "insensitive" } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    if (withinDays != null) {
+      const now = new Date();
+      const end = new Date(now);
+      end.setUTCDate(end.getUTCDate() + withinDays);
+      where.expiryDate = { not: null, lte: end };
+    }
+
+    const lots = await prisma.inventoryLot.findMany({
+      where,
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            nameEn: true,
+            sku: true,
+            barcode: true,
+            imageUrl: true,
+            isActive: true,
+          },
+        },
+        branch: { select: { id: true, name: true, nameEn: true } },
+      },
+      orderBy: [{ expiryDate: "asc" }, { receivedAt: "asc" }],
+      take: 500,
+    });
+
+    const mapped = lots.map((lot) => ({
+      ...lot,
+      product: lot.product
+        ? {
+            ...lot.product,
+            imageUrl: resolveStoredImageUrl(lot.product.imageUrl),
+          }
+        : lot.product,
+      daysUntilExpiry: lot.expiryDate
+        ? calendarDaysUntilExpiryUTC(lot.expiryDate)
+        : null,
+    }));
+
+    res.json({ lots: mapped });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "فشل تحميل الدفعات";
+    res.status(400).json({ error: msg });
+  }
+});
+
+/** منتجات/دفعات منتهية أو قرب انتهاء الصلاحية — ?withinDays=30 (افتراضي) */
 router.get("/expiry-alerts", async (req, res) => {
   try {
     const branchId =
@@ -19,6 +107,51 @@ router.get("/expiry-alerts", async (req, res) => {
         ? String(req.query.branchId).trim()
         : req.user.branchId || null;
     const orgId = req.user.organizationId;
+    const withinRaw = Number.parseInt(String(req.query.withinDays ?? "30"), 10);
+    const withinDays = Number.isFinite(withinRaw) ? Math.max(0, Math.min(365, withinRaw)) : 30;
+
+    const out = [];
+    const seenKeys = new Set();
+
+    const lotWhere = {
+      organizationId: orgId,
+      quantityOnHand: { gt: 0 },
+      expiryDate: { not: null },
+      ...(branchId ? { branchId } : {}),
+    };
+    const lots = await prisma.inventoryLot.findMany({
+      where: lotWhere,
+      include: {
+        product: { select: { id: true, name: true, nameEn: true, sku: true, imageUrl: true, isActive: true } },
+        branch: { select: { id: true, name: true, nameEn: true } },
+      },
+      orderBy: { expiryDate: "asc" },
+      take: 500,
+    });
+
+    for (const lot of lots) {
+      if (!lot.product?.isActive) continue;
+      const days = calendarDaysUntilExpiryUTC(lot.expiryDate);
+      if (days === null || days > withinDays) continue;
+      const status = days < 0 ? "expired" : days === 0 ? "today" : "soon";
+      const key = `lot:${lot.id}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      out.push({
+        source: "lot",
+        lotId: lot.id,
+        product: {
+          ...lot.product,
+          imageUrl: resolveStoredImageUrl(lot.product.imageUrl),
+        },
+        branchId: lot.branchId,
+        branchName: lot.branch?.name || null,
+        quantityOnHand: Number(lot.quantityOnHand),
+        expiryDate: lot.expiryDate,
+        daysUntilExpiry: days,
+        status,
+      });
+    }
 
     const products = await prisma.product.findMany({
       where: {
@@ -32,19 +165,28 @@ router.get("/expiry-alerts", async (req, res) => {
       orderBy: { expiryDate: "asc" },
     });
 
-    const out = [];
     for (const p of products) {
       const days = calendarDaysUntilExpiryUTC(p.expiryDate);
-      if (days === null || days > 0) continue;
+      if (days === null || days > withinDays) continue;
+      const key = `product:${p.id}`;
+      if (seenKeys.has(`lot-product:${p.id}`) || out.some((r) => r.product?.id === p.id && r.source === "lot")) {
+        // Prefer lot-level rows when present for same product
+        continue;
+      }
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      const status = days < 0 ? "expired" : days === 0 ? "today" : "soon";
       out.push({
+        source: "product",
         product: {
           ...p,
           imageUrl: resolveStoredImageUrl(p.imageUrl),
         },
         daysUntilExpiry: days,
-        status: days < 0 ? "expired" : "today",
+        status,
       });
     }
+
     out.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
     res.json(out);
   } catch (e) {

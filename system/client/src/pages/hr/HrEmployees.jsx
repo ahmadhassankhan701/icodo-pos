@@ -10,7 +10,6 @@ const inp = {
   background: "var(--bg)",
   color: "var(--text)",
   width: "100%",
-  maxWidth: 320,
   boxSizing: "border-box",
 };
 
@@ -149,14 +148,9 @@ export default function HrEmployees() {
 
       {(editing === "new" || (editing && editing !== "new")) && (
         <div
+          className="card page-form-grid"
           style={{
-            padding: 16,
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
             marginBottom: 20,
-            display: "grid",
-            gap: 10,
-            maxWidth: 480,
           }}
         >
           <input
@@ -177,12 +171,12 @@ export default function HrEmployees() {
             onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
             style={inp}
           />
-          <label style={{ fontSize: 13 }}>
-            {t("hr.empBranch")}
+          <label className="page-form-field">
+            <span>{t("hr.empBranch")}</span>
             <select
               value={form.branchId}
               onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-              style={{ ...inp, display: "block", marginTop: 4 }}
+              style={inp}
             >
               <option value="">{t("hr.noBranch")}</option>
               {branches.map((b) => (
@@ -192,12 +186,12 @@ export default function HrEmployees() {
               ))}
             </select>
           </label>
-          <label style={{ fontSize: 13 }}>
-            {t("hr.linkUser")}
+          <label className="page-form-field">
+            <span>{t("hr.linkUser")}</span>
             <select
               value={form.userId}
               onChange={(e) => setForm({ ...form, userId: e.target.value })}
-              style={{ ...inp, display: "block", marginTop: 4 }}
+              style={inp}
             >
               <option value="">{t("hr.noUser")}</option>
               {userCandidates.map((u) => (

@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 
 const router = Router();
 router.use(authMiddleware);
+router.use(requirePermission("customers"));
 
 function roundMoney(n) {
   return Math.round(Number(n) * 100) / 100;

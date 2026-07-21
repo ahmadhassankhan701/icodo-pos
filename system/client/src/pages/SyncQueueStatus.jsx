@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { listSyncQueueRows, removeSyncQueueItem } from "../offline/syncQueueList.js";
+import { retrySyncQueueItem } from "../offline/syncQueue.js";
 
 const card = {
   padding: 16,
@@ -64,8 +65,26 @@ export default function SyncQueueStatus() {
     }
   };
 
+  const onRetry = async (localId) => {
+    setMsg("");
+    try {
+      await retrySyncQueueItem(localId);
+      await load();
+      await refreshPending();
+      if (online) {
+        const n = await runSync();
+        if (n > 0) setMsg(t("syncQueue.syncedN").replace("{{n}}", String(n)));
+        await load();
+      } else {
+        setMsg(t("syncQueue.retryQueued"));
+      }
+    } catch (e) {
+      setMsg(String(e?.message || e));
+    }
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 960, width: "100%", marginInline: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
       <h1 style={{ margin: 0 }}>{t("syncQueue.title")}</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("syncQueue.intro")}</p>
 
@@ -112,8 +131,13 @@ export default function SyncQueueStatus() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.localId}>
-                    <td style={td}>{r.type}</td>
+                  <tr key={r.localId} style={r.status === "failed" ? { background: "color-mix(in srgb, var(--danger) 8%, transparent)" } : undefined}>
+                    <td style={td}>
+                      {r.type}
+                      {r.status === "failed" ? (
+                        <div style={{ color: "var(--danger)", fontSize: 11 }}>{t("syncQueue.statusFailed")}</div>
+                      ) : null}
+                    </td>
                     <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }} title={r.clientMutationId}>
                       {(r.clientMutationId || "").slice(0, 10)}…
                     </td>
@@ -121,14 +145,26 @@ export default function SyncQueueStatus() {
                     <td style={td}>{r.retryCount ?? 0}</td>
                     <td style={{ ...td, maxWidth: 220, wordBreak: "break-word" }}>{r.lastError || "—"}</td>
                     <td style={td}>
-                      <button
-                        type="button"
-                        className="btn-touch"
-                        style={{ fontSize: 12, padding: "6px 10px" }}
-                        onClick={() => onRemove(r.localId)}
-                      >
-                        {t("syncQueue.remove")}
-                      </button>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {r.status === "failed" ? (
+                          <button
+                            type="button"
+                            className="btn-touch"
+                            style={{ fontSize: 12, padding: "6px 10px", background: "var(--accent)", color: "#fff" }}
+                            onClick={() => onRetry(r.localId)}
+                          >
+                            {t("syncQueue.retry")}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn-touch"
+                          style={{ fontSize: 12, padding: "6px 10px" }}
+                          onClick={() => onRemove(r.localId)}
+                        >
+                          {t("syncQueue.remove")}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

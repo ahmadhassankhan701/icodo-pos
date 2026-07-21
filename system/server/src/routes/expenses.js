@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 
 const router = Router();
@@ -43,7 +43,7 @@ router.get("/", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/", requireRole("ADMIN", "MANAGER"), requirePermission("expenses"), async (req, res) => {
   const orgId = req.user.organizationId;
   const { category, amount, description, expenseDate } = req.body || {};
   const cat = String(category || "").toUpperCase();
@@ -85,7 +85,7 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   res.status(201).json(row);
 });
 
-router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.patch("/:id", requireRole("ADMIN", "MANAGER"), requirePermission("expenses"), async (req, res) => {
   const orgId = req.user.organizationId;
   const { category, amount, description, expenseDate } = req.body || {};
   const existing = await prisma.expense.findFirst({
@@ -124,7 +124,7 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   res.json(row);
 });
 
-router.delete("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.delete("/:id", requireRole("ADMIN", "MANAGER"), requirePermission("expenses"), async (req, res) => {
   const orgId = req.user.organizationId;
   const existing = await prisma.expense.findFirst({
     where: { id: req.params.id, organizationId: orgId },

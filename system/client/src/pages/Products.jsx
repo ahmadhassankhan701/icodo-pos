@@ -6,6 +6,9 @@ import { useToast } from "../context/ToastContext.jsx";
 import { productDisplayName } from "../utils/productName.js";
 import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { ProductImagePreview } from "../components/ProductImagePreview.jsx";
+import { BarcodeLabelPrint } from "../components/BarcodeLabelPrint.jsx";
+import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
+import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 
 function todayISO() {
   const d = new Date();
@@ -30,6 +33,8 @@ function emptyProductForm() {
     initialStock: "",
     minStockLevel: "",
     expiryDate: todayISO(),
+    /** @type {{ key: string, label: string, labelAr: string, priceDelta: string }[]} */
+    modifiers: [],
   };
 }
 
@@ -37,8 +42,15 @@ export default function Products() {
   const { user, isAdmin, can } = useAuth();
   const { t, locale } = useI18n();
   const { showToast } = useToast();
+  const { classFor } = usePrintSettings();
   const [list, setList] = useState([]);
+  const [printProduct, setPrintProduct] = useState(null);
+  const [printBarcodeCode, setPrintBarcodeCode] = useState("");
   const [low, setLow] = useState([]);
+  const [lotsProduct, setLotsProduct] = useState(null);
+  const [lotsRows, setLotsRows] = useState([]);
+  const [lotsLoading, setLotsLoading] = useState(false);
+  const [lotsMsg, setLotsMsg] = useState("");
   const [form, setForm] = useState(() => emptyProductForm());
   const [formMode, setFormMode] = useState(null); // null | "create" | "edit"
   const [editId, setEditId] = useState("");
@@ -50,6 +62,8 @@ export default function Products() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [excelBusy, setExcelBusy] = useState(false);
+  const [importRows, setImportRows] = useState(null); // null | array
+  const [importBusy, setImportBusy] = useState(false);
   const fileRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -57,6 +71,8 @@ export default function Products() {
 
   const activeBranchId = useActiveBranchId();
   const canEditProducts = can("productsEdit");
+  const showLots = isVerticalFeatureEnabled("lotsExpiry", user?.businessVertical);
+  const showCafeModifiers = isVerticalFeatureEnabled("cafePosExtras", user?.businessVertical);
 
   const catalogLabel = (row) => {
     if (!row) return "";
@@ -140,6 +156,14 @@ export default function Products() {
   };
 
   const openEditModal = (p) => {
+    const mods = Array.isArray(p.modifiers)
+      ? p.modifiers.map((m) => ({
+          key: String(m.key || ""),
+          label: String(m.label || ""),
+          labelAr: String(m.labelAr || ""),
+          priceDelta: String(m.priceDelta ?? "0"),
+        }))
+      : [];
     setForm({
       name: p.name && p.nameEn && p.name === p.nameEn ? "" : p.name || "",
       nameEn: p.nameEn || "",
@@ -154,6 +178,7 @@ export default function Products() {
       initialStock: "",
       minStockLevel: "",
       expiryDate: p.expiryDate ? String(p.expiryDate).slice(0, 10) : todayISO(),
+      modifiers: mods,
     });
     setEditId(p.id);
     setFormError("");
@@ -199,6 +224,16 @@ export default function Products() {
     }
     setFormBusy(true);
     try {
+      const modifiersPayload = showCafeModifiers
+        ? (form.modifiers || [])
+            .map((m) => ({
+              key: String(m.key || "").trim(),
+              label: String(m.label || m.key || "").trim(),
+              labelAr: String(m.labelAr || "").trim() || null,
+              priceDelta: Number(String(m.priceDelta).replace(",", ".")) || 0,
+            }))
+            .filter((m) => m.key)
+        : undefined;
       if (formMode === "create") {
         const bid = activeBranchId;
         if (!bid) {
@@ -223,6 +258,7 @@ export default function Products() {
             initialStock: form.initialStock === "" ? 0 : Number(form.initialStock),
             minStockLevel: form.minStockLevel === "" ? 5 : Number(form.minStockLevel),
             expiryDate: form.expiryDate?.trim() || null,
+            ...(modifiersPayload !== undefined ? { modifiers: modifiersPayload } : {}),
           },
         });
         showToast(t("products.toastCreated"), "success");
@@ -242,6 +278,7 @@ export default function Products() {
             imageUrl: String(form.imageUrl || "").trim(),
             sku: form.sku || null,
             barcode: form.barcode,
+            ...(modifiersPayload !== undefined ? { modifiers: modifiersPayload } : {}),
           },
         });
         showToast(t("products.toastUpdated"), "success");
@@ -301,6 +338,39 @@ export default function Products() {
       showToast(t("products.toastBarcode"), "success");
     } catch (e) {
       showToast(e?.message || t("products.generateBarcodeFailed"), "error");
+    }
+  };
+
+  const printBarcode = (p) => {
+    const code = String(p.barcode || p.sku || "").trim();
+    if (!code) {
+      showToast(t("products.noBarcodeToPrint"), "error");
+      return;
+    }
+    setPrintProduct(p);
+    setPrintBarcodeCode(code);
+    setTimeout(() => window.print(), 180);
+  };
+
+  const openLots = async (p) => {
+    if (!activeBranchId) {
+      showToast(t("products.needBranchForLots"), "error");
+      return;
+    }
+    setLotsProduct(p);
+    setLotsRows([]);
+    setLotsMsg("");
+    setLotsLoading(true);
+    try {
+      const q = new URLSearchParams();
+      q.set("branchId", activeBranchId);
+      const res = await api(`/api/products/${encodeURIComponent(p.id)}/lots?${q.toString()}`);
+      setLotsRows(Array.isArray(res?.lots) ? res.lots : []);
+      if (!(res?.lots || []).length) setLotsMsg(t("products.lotsEmpty"));
+    } catch (e) {
+      setLotsMsg(e.message || t("products.lotsLoadFailed"));
+    } finally {
+      setLotsLoading(false);
     }
   };
 
@@ -414,7 +484,42 @@ export default function Products() {
     }
     setExcelBusy(true);
     try {
-      const r = await apiUploadExcel("/api/products/import/excel", file, activeBranchId);
+      const r = await apiUploadExcel("/api/products/import/excel/preview", file, activeBranchId);
+      const rows = Array.isArray(r.rows) ? r.rows : [];
+      if (!rows.length) {
+        showToast(t("products.excelEmpty"), "error");
+        return;
+      }
+      setImportRows(rows);
+    } catch (err) {
+      showToast(err.message || "Import failed", "error");
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
+  const closeImportModal = () => {
+    if (importBusy) return;
+    setImportRows(null);
+  };
+
+  const removeImportRow = (key) => {
+    setImportRows((prev) => (prev ? prev.filter((r) => r.key !== key) : prev));
+  };
+
+  const clearImportRows = () => setImportRows([]);
+
+  const submitImportRows = async () => {
+    if (!importRows?.length || !activeBranchId) {
+      showToast(t("products.excelNoRows"), "error");
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const r = await api(`/api/products/import/excel/confirm?branchId=${encodeURIComponent(activeBranchId)}`, {
+        method: "POST",
+        body: { rows: importRows, branchId: activeBranchId },
+      });
       const msg = t("products.excelResult", {
         created: r.created ?? 0,
         updated: r.updated ?? 0,
@@ -422,14 +527,18 @@ export default function Products() {
       });
       const detail =
         r.errors?.length > 0
-          ? `\n${r.errors.slice(0, 5).map((x) => `صف ${x.row}: ${x.message}`).join("\n")}${r.errors.length > 5 ? "\n…" : ""}`
+          ? `\n${r.errors
+              .slice(0, 5)
+              .map((x) => (locale === "en" ? `Row ${x.row}: ${x.message}` : `صف ${x.row}: ${x.message}`))
+              .join("\n")}${r.errors.length > 5 ? "\n…" : ""}`
           : "";
       showToast(msg + detail, (r.errorCount ?? 0) > 0 ? "info" : "success", { duration: 5000 });
+      setImportRows(null);
       await load();
     } catch (err) {
       showToast(err.message || "Import failed", "error");
     } finally {
-      setExcelBusy(false);
+      setImportBusy(false);
     }
   };
 
@@ -599,7 +708,7 @@ export default function Products() {
               <th>{t("products.colExpiry")}</th>
               <th className="products-table__num">{t("products.colStock")}</th>
               <th>{t("products.colStatus")}</th>
-              {canEditProducts ? <th className="products-table__actions">{t("products.colActions")}</th> : null}
+              <th className="products-table__actions">{t("products.colActions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -637,33 +746,53 @@ export default function Products() {
                   <td>{fmtExpiry(p.expiryDate)}</td>
                   <td className="products-table__num">{inv?.quantity ?? t("common.none")}</td>
                   <td>{p.isActive ? t("products.statusActive") : t("products.statusInactive")}</td>
-                  {canEditProducts ? (
-                    <td className="products-table__actions">
-                      <div className="products-table__btns">
-                        <button type="button" style={btnSm} onClick={() => openEditModal(p)}>
-                          {t("common.edit")}
-                        </button>
+                  <td className="products-table__actions">
+                    <div className="products-table__btns">
+                      <button
+                        type="button"
+                        style={{ ...btnSm, background: "var(--accent)", color: "#fff" }}
+                        onClick={() => printBarcode(p)}
+                        title={t("products.printBarcode")}
+                      >
+                        {t("products.printBarcode")}
+                      </button>
+                      {showLots ? (
                         <button
                           type="button"
-                          style={{ ...btnSm, background: "var(--danger)", color: "#fff" }}
-                          onClick={() => remove(p.id)}
+                          style={{ ...btnSm, background: "var(--surface2)" }}
+                          onClick={() => openLots(p)}
+                          title={t("products.viewLots")}
                         >
-                          {t("common.delete")}
+                          {t("products.viewLots")}
                         </button>
-                        <button
-                          type="button"
-                          style={{
-                            ...btnSm,
-                            background: p.isActive ? "var(--warning)" : "var(--success)",
-                            color: p.isActive ? "#111" : "#fff",
-                          }}
-                          onClick={() => toggleActive(p)}
-                        >
-                          {p.isActive ? t("products.disable") : t("products.enable")}
-                        </button>
-                      </div>
-                    </td>
-                  ) : null}
+                      ) : null}
+                      {canEditProducts ? (
+                        <>
+                          <button type="button" style={btnSm} onClick={() => openEditModal(p)}>
+                            {t("common.edit")}
+                          </button>
+                          <button
+                            type="button"
+                            style={{ ...btnSm, background: "var(--danger)", color: "#fff" }}
+                            onClick={() => remove(p.id)}
+                          >
+                            {t("common.delete")}
+                          </button>
+                          <button
+                            type="button"
+                            style={{
+                              ...btnSm,
+                              background: p.isActive ? "var(--warning)" : "var(--success)",
+                              color: p.isActive ? "#111" : "#fff",
+                            }}
+                            onClick={() => toggleActive(p)}
+                          >
+                            {p.isActive ? t("products.disable") : t("products.enable")}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -933,6 +1062,105 @@ export default function Products() {
                   onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
                 />
               </label>
+              {showCafeModifiers ? (
+                <div style={{ gridColumn: "1 / -1", display: "grid", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: 14 }}>{t("products.modifiersTitle")}</strong>
+                    <button
+                      type="button"
+                      className="btn-touch"
+                      style={{ background: "var(--surface2)", maxWidth: 180 }}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          modifiers: [
+                            ...(form.modifiers || []),
+                            { key: "", label: "", labelAr: "", priceDelta: "0" },
+                          ],
+                        })
+                      }
+                    >
+                      {t("products.addModifier")}
+                    </button>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>
+                    {t("products.modifiersHint")}
+                  </p>
+                  {(form.modifiers || []).map((m, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                        gap: 8,
+                        alignItems: "end",
+                      }}
+                    >
+                      <label style={fld}>
+                        <span>{t("products.modKey")}</span>
+                        <input
+                          style={inp}
+                          value={m.key}
+                          onChange={(e) => {
+                            const modifiers = [...form.modifiers];
+                            modifiers[idx] = { ...modifiers[idx], key: e.target.value };
+                            setForm({ ...form, modifiers });
+                          }}
+                        />
+                      </label>
+                      <label style={fld}>
+                        <span>{t("products.modLabelEn")}</span>
+                        <input
+                          style={inp}
+                          value={m.label}
+                          onChange={(e) => {
+                            const modifiers = [...form.modifiers];
+                            modifiers[idx] = { ...modifiers[idx], label: e.target.value };
+                            setForm({ ...form, modifiers });
+                          }}
+                        />
+                      </label>
+                      <label style={fld}>
+                        <span>{t("products.modLabelAr")}</span>
+                        <input
+                          style={inp}
+                          value={m.labelAr}
+                          onChange={(e) => {
+                            const modifiers = [...form.modifiers];
+                            modifiers[idx] = { ...modifiers[idx], labelAr: e.target.value };
+                            setForm({ ...form, modifiers });
+                          }}
+                        />
+                      </label>
+                      <label style={fld}>
+                        <span>{t("products.modDelta")}</span>
+                        <input
+                          style={inp}
+                          type="number"
+                          step="0.01"
+                          value={m.priceDelta}
+                          onChange={(e) => {
+                            const modifiers = [...form.modifiers];
+                            modifiers[idx] = { ...modifiers[idx], priceDelta: e.target.value };
+                            setForm({ ...form, modifiers });
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-touch"
+                        style={{ background: "var(--danger)", color: "#fff", maxWidth: 100 }}
+                        onClick={() => {
+                          const modifiers = form.modifiers.filter((_, i) => i !== idx);
+                          setForm({ ...form, modifiers });
+                        }}
+                      >
+                        {t("common.delete")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {String(form.imageUrl || "").trim() ? (
                 <div style={{ gridColumn: "1 / -1" }}>
                   <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 8 }}>
@@ -965,9 +1193,265 @@ export default function Products() {
           </form>
         </div>
       ) : null}
+
+      {importRows !== null ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="excel-import-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 70,
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            background: "rgba(15, 23, 42, 0.55)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !importBusy) closeImportModal();
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "min(960px, 100%)",
+              maxHeight: "90vh",
+              margin: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              padding: 18,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h3 id="excel-import-title" style={{ margin: 0 }}>
+                  {t("products.excelReviewTitle")}
+                </h3>
+                <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--muted)" }}>
+                  {t("products.excelReviewHint", { n: importRows.length })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeImportModal}
+                disabled={importBusy}
+                style={{ ...btnSm, background: "var(--surface2)" }}
+              >
+                {t("common.close")}
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn-touch"
+                disabled={importBusy || importRows.length === 0}
+                onClick={clearImportRows}
+                style={{ background: "var(--surface2)", minHeight: 40 }}
+              >
+                {t("products.excelRemoveAll")}
+              </button>
+            </div>
+
+            <div style={{ overflow: "auto", flex: 1, minHeight: 0, border: "1px solid var(--border)", borderRadius: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ position: "sticky", top: 0, background: "var(--surface2)", textAlign: "start" }}>
+                    <th style={thCell}>#</th>
+                    <th style={thCell}>{t("products.name")}</th>
+                    <th style={thCell}>SKU</th>
+                    <th style={thCell}>{t("products.category")}</th>
+                    <th style={thCell}>{t("products.colRetail")}</th>
+                    <th style={thCell}>{t("products.colStock")}</th>
+                    <th style={thCell}>{t("products.colActions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                        {t("products.excelNoRows")}
+                      </td>
+                    </tr>
+                  ) : (
+                    importRows.map((row) => (
+                      <tr
+                        key={row.key}
+                        style={{
+                          borderTop: "1px solid var(--border)",
+                          background: row.invalidPrice
+                            ? "color-mix(in srgb, #dc2626 8%, transparent)"
+                            : undefined,
+                        }}
+                      >
+                        <td style={tdCell}>{row.rowNum}</td>
+                        <td style={tdCell}>
+                          <div style={{ fontWeight: 600 }}>{row.nameEn || row.name}</div>
+                          {row.nameEn && row.name && row.name !== row.nameEn ? (
+                            <div style={{ color: "var(--muted)", fontSize: 12 }}>{row.name}</div>
+                          ) : null}
+                          {row.invalidPrice ? (
+                            <div style={{ color: "var(--danger)", fontSize: 12 }}>{t("products.excelInvalidPrice")}</div>
+                          ) : null}
+                        </td>
+                        <td style={tdCell}>{row.sku || "—"}</td>
+                        <td style={tdCell}>
+                          {[row.category, row.subcategory].filter(Boolean).join(" / ") || "—"}
+                        </td>
+                        <td style={tdCell}>{row.price === "" || row.price == null ? "—" : row.price}</td>
+                        <td style={tdCell}>{row.stockQty === "" || row.stockQty == null ? "—" : row.stockQty}</td>
+                        <td style={tdCell}>
+                          <button
+                            type="button"
+                            disabled={importBusy}
+                            onClick={() => removeImportRow(row.key)}
+                            style={{ ...btnSm, background: "var(--surface2)", color: "var(--danger)" }}
+                          >
+                            {t("common.delete")}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn-touch"
+                disabled={importBusy}
+                style={{ background: "var(--surface2)" }}
+                onClick={closeImportModal}
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                className="btn-touch"
+                disabled={importBusy || importRows.length === 0}
+                style={{ background: "var(--accent)", color: "#fff" }}
+                onClick={submitImportRows}
+              >
+                {importBusy ? t("common.loading") : t("products.excelSubmitImport")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {lotsProduct ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 70,
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            background: "rgba(15, 23, 42, 0.55)",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLotsProduct(null);
+          }}
+        >
+          <div className="card" style={{ width: "min(720px, 100%)", maxHeight: "85vh", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>{t("products.lotsTitle")}</h2>
+                <p style={{ margin: "6px 0 0", color: "var(--muted)", fontSize: 13 }}>
+                  {productDisplayName(lotsProduct, locale)}
+                </p>
+              </div>
+              <button type="button" className="btn-touch" onClick={() => setLotsProduct(null)}>
+                {t("common.cancel")}
+              </button>
+            </div>
+            <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--muted)" }}>{t("products.lotsIntro")}</p>
+            {lotsLoading ? (
+              <div style={{ padding: 16 }}>{t("common.loading")}</div>
+            ) : lotsMsg && !lotsRows.length ? (
+              <div style={{ padding: "16px 0", color: "var(--muted)" }}>{lotsMsg}</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 12 }}>
+                <thead>
+                  <tr style={{ color: "var(--muted)", textAlign: "start" }}>
+                    <th style={thCell}>{t("products.lotReceived")}</th>
+                    <th style={thCell}>{t("products.colExpiry")}</th>
+                    <th style={thCell}>{t("products.lotQtyOnHand")}</th>
+                    <th style={thCell}>{t("products.lotQtyReceived")}</th>
+                    <th style={thCell}>{t("products.colPurchase")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotsRows.map((lot) => {
+                    const exp = lot.expiryDate ? String(lot.expiryDate).slice(0, 10) : "—";
+                    const days =
+                      lot.expiryDate != null
+                        ? Math.ceil(
+                            (new Date(lot.expiryDate).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) /
+                              86400000,
+                          )
+                        : null;
+                    const tone =
+                      days == null
+                        ? undefined
+                        : days < 0
+                          ? "var(--danger)"
+                          : days <= 30
+                            ? "var(--warning)"
+                            : undefined;
+                    return (
+                      <tr key={lot.id} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td style={tdCell}>
+                          {lot.receivedAt
+                            ? new Date(lot.receivedAt).toLocaleDateString(locale === "en" ? "en-GB" : "ar-SA")
+                            : "—"}
+                        </td>
+                        <td style={{ ...tdCell, color: tone, fontWeight: tone ? 700 : undefined }}>
+                          {exp}
+                          {days != null ? (
+                            <div style={{ fontSize: 11, fontWeight: 500 }}>
+                              {days < 0
+                                ? t("products.lotExpired")
+                                : t("products.lotDaysLeft", { days: String(days) })}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td style={tdCell}>{Number(lot.quantityOnHand ?? 0)}</td>
+                        <td style={tdCell}>{Number(lot.quantityReceived ?? 0)}</td>
+                        <td style={tdCell}>
+                          {lot.unitCost != null ? Number(lot.unitCost).toFixed(2) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className={`print-barcode ${classFor("other")}`}
+        style={{ position: "fixed", left: -99999, top: 0, width: 360 }}
+        aria-hidden="true"
+      >
+        <BarcodeLabelPrint product={printProduct} code={printBarcodeCode} />
+      </div>
     </div>
   );
 }
+
+const thCell = { padding: "10px 12px", fontWeight: 600, whiteSpace: "nowrap" };
+const tdCell = { padding: "10px 12px", verticalAlign: "top" };
 
 const inp = {
   padding: 10,

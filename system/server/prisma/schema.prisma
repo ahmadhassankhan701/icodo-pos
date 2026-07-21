@@ -50,6 +50,7 @@ model Organization {
 
   users                    User[]
   branches                 Branch[]
+  planPurchases            OrganizationPlanPurchase[]
   products                 Product[]
   brands                   Brand[]
   categories               Category[]
@@ -83,6 +84,22 @@ model Organization {
   deliveryStops           DeliveryStop[]
   inventoryLots           InventoryLot[]
   saleItemLots            SaleItemLot[]
+}
+
+/// Organization subscription purchases and renewals shown in the Plan page.
+model OrganizationPlanPurchase {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan           String
+  amount         Decimal?
+  currency       String       @default("SAR")
+  reference      String?
+  note           String?
+  purchasedAt    DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, purchasedAt])
 }
 
 /// فئات مصاريف تشغيلية قابلة للتوسعة
@@ -869,6 +886,8 @@ model Product {
   imageUrl       String?
   isActive       Boolean      @default(true)
   externalId     String?
+  /// اختياري: إضافات/خيارات للكافيه والمطاعم [{key,label,labelAr?,priceDelta}]
+  modifiers      Json?
   /// تاريخ انتهاء الصلاحية (اختياري)
   expiryDate            DateTime?
   /// عدد الأيام قبل التاريخ لبدء التنبيه (إن وُجد تاريخ؛ الافتراضي في المنطق 14)
@@ -981,6 +1000,10 @@ model Sale {
   invoiceStatus    InvoiceStatus   @default(ISSUED)
   dueDate          DateTime?
   paidAt           DateTime?
+  /// رقم الطاولة (كافيه / مطعم)
+  tableNumber      String?
+  /// ملاحظات الطلب
+  orderNote        String?
   createdAt        DateTime        @default(now())
   items            SaleItem[]
   refunds          Refund[]
@@ -1105,6 +1128,8 @@ model SaleItem {
   quantity  Int
   unitPrice Decimal
   subtotal  Decimal
+  /// الإضافات المختارة للسطر [{key,label,priceDelta}]
+  modifiers Json?
   lotUsages SaleItemLot[]
 }
 

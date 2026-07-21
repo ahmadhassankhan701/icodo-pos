@@ -4,6 +4,11 @@ import { productDisplayName } from "../utils/productName.js";
 import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
 import { ProductImagePreview } from "./ProductImagePreview.jsx";
 
+function modifierLabel(m, locale) {
+  if (locale === "en") return m.label || m.key;
+  return m.labelAr || m.label || m.key;
+}
+
 /**
  * Premium cart list for POS left panel — qty steppers, line totals, empty state.
  */
@@ -51,10 +56,12 @@ export function PosCartPanel({ lines, onChangeQty, onRemove, total }) {
 
       <ul className="pos-cart-panel__list">
         {lines.map((line) => {
+          const key = line.lineKey || line.productId;
           const lineTotal = line.unitPrice * line.quantity;
           const belowCost = isUnitPriceAtOrBelowCost(line.unitPrice, line.cost);
+          const mods = Array.isArray(line.modifiers) ? line.modifiers : [];
           return (
-            <li key={line.productId} className="pos-cart-line">
+            <li key={key} className="pos-cart-line">
               <div className="pos-cart-line__media">
                 <ProductImagePreview url={line.imageUrl} alt="" width={72} height={72} />
               </div>
@@ -66,12 +73,17 @@ export function PosCartPanel({ lines, onChangeQty, onRemove, total }) {
                   <button
                     type="button"
                     className="pos-cart-line__remove"
-                    onClick={() => onRemove(line.productId)}
+                    onClick={() => onRemove(key)}
                     aria-label={t("common.delete")}
                   >
                     ×
                   </button>
                 </div>
+                {mods.length ? (
+                  <div className="pos-cart-line__mods" style={{ fontSize: 12, color: "var(--muted)" }}>
+                    {mods.map((m) => modifierLabel(m, locale)).join(" · ")}
+                  </div>
+                ) : null}
                 <div className="pos-cart-line__price">
                   {line.unitPrice.toFixed(2)} {t("common.currency")}
                   <span className="pos-cart-line__each"> / {t("cart.each")}</span>
@@ -87,7 +99,7 @@ export function PosCartPanel({ lines, onChangeQty, onRemove, total }) {
                       type="button"
                       className="pos-qty__btn"
                       disabled={line.quantity <= 1}
-                      onClick={() => onChangeQty(line.productId, line.quantity - 1)}
+                      onClick={() => onChangeQty(key, line.quantity - 1)}
                       aria-label="−"
                     >
                       −
@@ -98,13 +110,13 @@ export function PosCartPanel({ lines, onChangeQty, onRemove, total }) {
                       min={1}
                       max={line.maxStock}
                       value={line.quantity}
-                      onChange={(e) => onChangeQty(line.productId, Number(e.target.value))}
+                      onChange={(e) => onChangeQty(key, Number(e.target.value))}
                     />
                     <button
                       type="button"
                       className="pos-qty__btn"
                       disabled={line.quantity >= (line.maxStock ?? Infinity)}
-                      onClick={() => onChangeQty(line.productId, line.quantity + 1)}
+                      onClick={() => onChangeQty(key, line.quantity + 1)}
                       aria-label="+"
                     >
                       +

@@ -76,7 +76,7 @@ export default function Permissions() {
   const current = matrices[tab] || {};
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
       <div>
         <h1 style={{ margin: 0 }}>{t("permissions.title")}</h1>
         <p style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: 14 }}>

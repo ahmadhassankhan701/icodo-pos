@@ -25,6 +25,8 @@ export default function Purchases() {
   const [list, setList] = useState([]);
   const [msg, setMsg] = useState("");
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "" });
+  const [editingSupplierId, setEditingSupplierId] = useState("");
+  const [editSupplier, setEditSupplier] = useState({ name: "", phone: "" });
   const [lookbackDays, setLookbackDays] = useState("30");
   const [targetStockDays, setTargetStockDays] = useState("21");
   const [recommendations, setRecommendations] = useState([]);
@@ -68,6 +70,33 @@ export default function Purchases() {
     setSuppliers((prev) => [...prev, s].sort((a, b) => a.name.localeCompare(b.name)));
     setSupplierId(s.id);
     setNewSupplier({ name: "", phone: "" });
+  };
+
+  const startEditSupplier = (s) => {
+    setEditingSupplierId(s.id);
+    setEditSupplier({ name: s.name || "", phone: s.phone || "" });
+  };
+
+  const saveSupplier = async () => {
+    if (!editingSupplierId || !editSupplier.name.trim()) return;
+    const s = await api(`/api/suppliers/${editingSupplierId}`, {
+      method: "PATCH",
+      body: { name: editSupplier.name.trim(), phone: editSupplier.phone.trim() || null },
+    });
+    setSuppliers((prev) =>
+      prev.map((row) => (row.id === s.id ? s : row)).sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    setEditingSupplierId("");
+    setMsg(t("purchases.supplierUpdated"));
+  };
+
+  const deleteSupplier = async (id) => {
+    if (!window.confirm(t("purchases.deleteSupplierConfirm"))) return;
+    await api(`/api/suppliers/${id}`, { method: "DELETE" });
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+    if (supplierId === id) setSupplierId("");
+    if (editingSupplierId === id) setEditingSupplierId("");
+    setMsg(t("purchases.supplierDeleted"));
   };
 
   const submit = async (e) => {
@@ -203,6 +232,64 @@ export default function Purchases() {
         </button>
       </form>
 
+      {suppliers.length ? (
+        <div className="card" style={{ overflowX: "auto" }}>
+          <strong>{t("purchases.editSupplier")}</strong>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
+            <tbody>
+              {suppliers.map((s) => (
+                <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  {editingSupplierId === s.id ? (
+                    <>
+                      <td style={{ padding: 6 }}>
+                        <input
+                          value={editSupplier.name}
+                          onChange={(e) => setEditSupplier({ ...editSupplier, name: e.target.value })}
+                          style={{ ...inp, minHeight: 36 }}
+                        />
+                      </td>
+                      <td style={{ padding: 6 }}>
+                        <input
+                          value={editSupplier.phone}
+                          onChange={(e) => setEditSupplier({ ...editSupplier, phone: e.target.value })}
+                          style={{ ...inp, minHeight: 36, width: 140 }}
+                        />
+                      </td>
+                      <td style={{ padding: 6, whiteSpace: "nowrap" }}>
+                        <button type="button" className="btn-touch" onClick={saveSupplier} style={{ marginInlineEnd: 6 }}>
+                          {t("common.save")}
+                        </button>
+                        <button type="button" className="btn-touch" onClick={() => setEditingSupplierId("")}>
+                          {t("common.cancel")}
+                        </button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ padding: 6 }}>{s.name}</td>
+                      <td style={{ padding: 6 }}>{s.phone || "—"}</td>
+                      <td style={{ padding: 6, whiteSpace: "nowrap" }}>
+                        <button type="button" className="btn-touch" onClick={() => startEditSupplier(s)} style={{ marginInlineEnd: 6 }}>
+                          {t("common.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-touch"
+                          onClick={() => deleteSupplier(s.id)}
+                          style={{ background: "var(--danger)", color: "#fff" }}
+                        >
+                          {t("common.delete")}
+                        </button>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
       <div className="card" style={{ display: "grid", gap: 10 }}>
         <strong>{t("purchases.autoReorderTitle")}</strong>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -306,24 +393,26 @@ export default function Purchases() {
       </div>
 
       <form className="card" onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("purchases.supplierOptional")}</span>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={{ ...inp, minHeight: 44 }}>
-            <option value="">{t("common.none")}</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="page-form-grid">
+          <label className="page-form-field">
+            <span>{t("purchases.supplierOptional")}</span>
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={{ ...inp, minHeight: 44 }}>
+              <option value="">{t("common.none")}</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="page-form-field">
+            <span>{t("returns.note")}</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} style={inp} />
+          </label>
+        </div>
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
           <input type="checkbox" checked={updateProductCost} onChange={(e) => setUpdateProductCost(e.target.checked)} />
           {t("purchases.updateCost")}
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("returns.note")}</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} style={inp} />
         </label>
         <strong>{t("purchases.lines")}</strong>
         {lines.map((line, i) => (

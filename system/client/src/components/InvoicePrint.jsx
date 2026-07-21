@@ -39,7 +39,7 @@ export function InvoicePrint({ sale, branchName }) {
           {t("invoice.date")} {new Date(sale.createdAt).toLocaleString(loc)}
         </div>
         <div>
-          {t("invoice.id")} {sale.id}
+          {t("invoice.id")} {sale.invoiceNumber || sale.id}
         </div>
         <div>
           {t("invoice.cashier")} {sale.user?.name || "—"}
@@ -70,6 +70,16 @@ export function InvoicePrint({ sale, branchName }) {
             {sale.customer.phone ? ` — ${sale.customer.phone}` : ""}
           </div>
         ) : null}
+        {sale.tableNumber ? (
+          <div>
+            {t("invoice.table")}: {sale.tableNumber}
+          </div>
+        ) : null}
+        {sale.orderNote ? (
+          <div>
+            {t("invoice.orderNote")}: {sale.orderNote}
+          </div>
+        ) : null}
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
@@ -80,13 +90,27 @@ export function InvoicePrint({ sale, branchName }) {
           </tr>
         </thead>
         <tbody>
-          {sale.items?.map((it) => (
-            <tr key={it.id} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={{ padding: 8 }}>{productDisplayName(it.product, locale)}</td>
-              <td style={{ padding: 8, textAlign: "center" }}>{it.quantity}</td>
-              <td style={{ padding: 8 }}>{Number(it.subtotal).toFixed(2)}</td>
-            </tr>
-          ))}
+          {sale.items?.map((it) => {
+            const mods = Array.isArray(it.modifiers) ? it.modifiers : [];
+            return (
+              <tr key={it.id} style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: 8 }}>
+                  {productDisplayName(it.product, locale)}
+                  {mods.length ? (
+                    <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                      {mods
+                        .map((m) =>
+                          locale === "en" ? m.label || m.key : m.labelAr || m.label || m.key
+                        )
+                        .join(" · ")}
+                    </div>
+                  ) : null}
+                </td>
+                <td style={{ padding: 8, textAlign: "center" }}>{it.quantity}</td>
+                <td style={{ padding: 8 }}>{Number(it.subtotal).toFixed(2)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <div style={{ marginTop: 12, fontSize: 14 }}>

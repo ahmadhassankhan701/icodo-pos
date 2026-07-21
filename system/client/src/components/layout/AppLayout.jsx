@@ -10,24 +10,59 @@ import { useAlertsBadgeCount } from "../../hooks/useAlertsBadgeCount.js";
 import { isVerticalFeatureEnabled } from "../../lib/verticalFeatures.js";
 import { SidebarIcon } from "../SidebarIcon.jsx";
 
-const NAV_SECTION_IDS = ["dashboard", "inventory", "profile", "admin"];
+const NAV_SECTION_IDS = ["dashboard", "inventory", "customers", "business", "admin"];
 
 /** Which sidebar section owns the current route (for auto-expand). */
 function navSectionForPath(pathname) {
   const p = pathname || "";
-  if (p.startsWith("/dashboard") || p.startsWith("/alerts") || p.startsWith("/sync-queue")) {
+  if (
+    p.startsWith("/dashboard") ||
+    p.startsWith("/alerts") ||
+    p.startsWith("/sync-queue") ||
+    p.startsWith("/reports") ||
+    p.startsWith("/sales")
+  ) {
     return "dashboard";
   }
-  if (p.startsWith("/products") || p.startsWith("/categories") || p.startsWith("/cash")) return "inventory";
   if (
-    p.startsWith("/customer-accounts") ||
-    p.startsWith("/audit") ||
-    p.startsWith("/customers") ||
-    p.startsWith("/loyalty")
+    p.startsWith("/products") ||
+    p.startsWith("/inventory-lots") ||
+    p.startsWith("/categories") ||
+    p.startsWith("/cash") ||
+    p.startsWith("/purchases") ||
+    p.startsWith("/transfer") ||
+    p.startsWith("/count") ||
+    p.startsWith("/returns")
   ) {
-    return "profile";
+    return "inventory";
   }
-  if (p.startsWith("/users") || p.startsWith("/branches") || p.startsWith("/platform") || p.startsWith("/permissions")) {
+  if (
+    p.startsWith("/customers") ||
+    p.startsWith("/customer-accounts") ||
+    p.startsWith("/loyalty") ||
+    p.startsWith("/appointments") ||
+    p.startsWith("/delivery")
+  ) {
+    return "customers";
+  }
+  if (
+    p.startsWith("/accounting") ||
+    p.startsWith("/zakat") ||
+    p.startsWith("/commissions") ||
+    p.startsWith("/automations") ||
+    p.startsWith("/hr")
+  ) {
+    return "business";
+  }
+  if (
+    p.startsWith("/users") ||
+    p.startsWith("/branches") ||
+    p.startsWith("/platform") ||
+    p.startsWith("/permissions") ||
+    p.startsWith("/sync") ||
+    p.startsWith("/plan") ||
+    p.startsWith("/audit")
+  ) {
     return "admin";
   }
   return "";
@@ -98,13 +133,13 @@ export function AppLayout() {
   const bv = user?.businessVertical;
   const { t, locale } = useI18n();
   const sidebarLogoSrc = isDark
-    ? "/icodo-icon-dark.png?v=2"
-    : "/icodo-sidebar-light.png?v=2";
+    ? "/icodo-icon-dark.png?v=3"
+    : "/icodo-sidebar-light.png?v=3";
   const nav = useNavigate();
   const location = useLocation();
   const { count: alertsBadge } = useAlertsBadgeCount();
 
-  const isPosRoute = location.pathname === "/pos";
+  const isPosRoute = location.pathname === "/pos" || location.pathname === "/wholesale";
 
   const [openSections, setOpenSections] = useState(() =>
     initialOpenSections(typeof window !== "undefined" ? window.location.pathname : ""),
@@ -134,23 +169,36 @@ export function AppLayout() {
             />
           </div>
           {canSwitchBranch ? (
-            <label className="app-sidebar-branch">
-              <span className="app-sidebar-branch-label">{t("branchContext.label")}</span>
-              <select
-                value={activeBranchId || ""}
-                onChange={(e) => setActiveBranchId(e.target.value)}
-                aria-label={t("branchContext.pick")}
-              >
-                {branches.length === 0 ? (
-                  <option value="">{t("branchContext.pick")}</option>
-                ) : null}
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {branchDisplayName(b, locale)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="app-sidebar-branch">
+              <span className="app-sidebar-branch-kicker">{t("branchContext.label")}</span>
+              <div className="app-sidebar-branch-control">
+                <span className="app-sidebar-branch-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </span>
+                <select
+                  value={activeBranchId || ""}
+                  onChange={(e) => setActiveBranchId(e.target.value)}
+                  aria-label={t("branchContext.pick")}
+                >
+                  {branches.length === 0 ? (
+                    <option value="">{t("branchContext.pick")}</option>
+                  ) : null}
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {branchDisplayName(b, locale)}
+                    </option>
+                  ))}
+                </select>
+                <span className="app-sidebar-branch-chevron" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </span>
+              </div>
+            </div>
           ) : null}
         </div>
 
@@ -167,6 +215,18 @@ export function AppLayout() {
               <SidebarIcon name="analytics" />
               <span>{t("nav.analytics")}</span>
             </NavLink>
+            {can("reports") ? (
+              <NavLink to="/reports" className={sidebarLinkClass}>
+                <SidebarIcon name="reports" />
+                <span>{t("nav.reports")}</span>
+              </NavLink>
+            ) : null}
+            {(can("pos") || can("reports")) ? (
+              <NavLink to="/sales" className={sidebarLinkClass}>
+                <SidebarIcon name="sales" />
+                <span>{t("nav.sales")}</span>
+              </NavLink>
+            ) : null}
             <NavLink to="/alerts" className={sidebarLinkClass}>
               <SidebarIcon name="bell" />
               <span className="app-sidebar-link-row">
@@ -191,6 +251,13 @@ export function AppLayout() {
             </NavLink>
           ) : null}
 
+          {can("wholesale") && isVerticalFeatureEnabled("wholesale", bv) ? (
+            <NavLink to="/wholesale" className={sidebarLinkClass}>
+              <SidebarIcon name="wholesale" />
+              <span>{t("nav.wholesale")}</span>
+            </NavLink>
+          ) : null}
+
           <SidebarNavSection
             sectionId="inventory"
             title={t("nav.section.inventory")}
@@ -205,10 +272,40 @@ export function AppLayout() {
                 <span>{t("nav.products")}</span>
               </NavLink>
             ) : null}
+            {can("productsView") && isVerticalFeatureEnabled("lotsExpiry", bv) ? (
+              <NavLink to="/inventory-lots" className={sidebarLinkClass}>
+                <SidebarIcon name="inventory" />
+                <span>{t("nav.lots")}</span>
+              </NavLink>
+            ) : null}
             {can("catalogEdit") ? (
               <NavLink to="/categories" className={sidebarLinkClass}>
                 <SidebarIcon name="categories" />
                 <span>{t("nav.categories")}</span>
+              </NavLink>
+            ) : null}
+            {can("purchases") ? (
+              <NavLink to="/purchases" className={sidebarLinkClass}>
+                <SidebarIcon name="purchases" />
+                <span>{t("nav.purchases")}</span>
+              </NavLink>
+            ) : null}
+            {can("transfer") ? (
+              <NavLink to="/transfer" className={sidebarLinkClass}>
+                <SidebarIcon name="transfer" />
+                <span>{t("nav.transfer")}</span>
+              </NavLink>
+            ) : null}
+            {can("stockCount") ? (
+              <NavLink to="/count" className={sidebarLinkClass}>
+                <SidebarIcon name="count" />
+                <span>{t("nav.count")}</span>
+              </NavLink>
+            ) : null}
+            {can("refunds") ? (
+              <NavLink to="/returns" className={sidebarLinkClass}>
+                <SidebarIcon name="returns" />
+                <span>{t("nav.returns")}</span>
               </NavLink>
             ) : null}
             {can("cashSession") ? (
@@ -220,35 +317,81 @@ export function AppLayout() {
           </SidebarNavSection>
 
           <SidebarNavSection
-            sectionId="profile"
-            title={t("nav.section.profile")}
-            icon="profile"
-            expanded={Boolean(openSections.profile)}
-            onToggle={() => toggleNavSection("profile")}
+            sectionId="customers"
+            title={t("nav.section.customers")}
+            icon="customers"
+            expanded={Boolean(openSections.customers)}
+            onToggle={() => toggleNavSection("customers")}
             t={t}
           >
-            {can("receivables") && isVerticalFeatureEnabled("customerAccounts", bv) ? (
-              <NavLink to="/customer-accounts" className={sidebarLinkClass}>
-                <SidebarIcon name="accounts" />
-                <span>{t("nav.accounts")}</span>
-              </NavLink>
-            ) : null}
-            {can("audit") ? (
-              <NavLink to="/audit" className={sidebarLinkClass}>
-                <SidebarIcon name="audit" />
-                <span>{t("nav.auditLogs")}</span>
-              </NavLink>
-            ) : null}
             {can("customers") ? (
               <NavLink to="/customers" className={sidebarLinkClass}>
                 <SidebarIcon name="customers" />
                 <span>{t("nav.customers")}</span>
               </NavLink>
             ) : null}
+            {can("receivables") && isVerticalFeatureEnabled("customerAccounts", bv) ? (
+              <NavLink to="/customer-accounts" className={sidebarLinkClass}>
+                <SidebarIcon name="accounts" />
+                <span>{t("nav.accounts")}</span>
+              </NavLink>
+            ) : null}
             {can("loyalty") ? (
               <NavLink to="/loyalty" className={sidebarLinkClass}>
                 <SidebarIcon name="coupons" />
                 <span>{t("nav.coupons")}</span>
+              </NavLink>
+            ) : null}
+            {(isAdmin || isManager) && isVerticalFeatureEnabled("appointments", bv) ? (
+              <NavLink to="/appointments" className={sidebarLinkClass}>
+                <SidebarIcon name="appointments" />
+                <span>{t("nav.appointments")}</span>
+              </NavLink>
+            ) : null}
+            {(isAdmin || isManager) && isVerticalFeatureEnabled("delivery", bv) ? (
+              <NavLink to="/delivery" className={sidebarLinkClass}>
+                <SidebarIcon name="delivery" />
+                <span>{t("nav.delivery")}</span>
+              </NavLink>
+            ) : null}
+          </SidebarNavSection>
+
+          <SidebarNavSection
+            sectionId="business"
+            title={t("nav.section.business")}
+            icon="business"
+            expanded={Boolean(openSections.business)}
+            onToggle={() => toggleNavSection("business")}
+            t={t}
+          >
+            {isAdmin || isManager ? (
+              <NavLink to="/accounting" className={sidebarLinkClass}>
+                <SidebarIcon name="accounting" />
+                <span>{t("nav.accounting")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin || isManager ? (
+              <NavLink to="/zakat" className={sidebarLinkClass}>
+                <SidebarIcon name="zakat" />
+                <span>{t("nav.zakat")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin || isManager ? (
+              <NavLink to="/commissions" className={sidebarLinkClass}>
+                <SidebarIcon name="commissions" />
+                <span>{t("nav.commissions")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin || isManager ? (
+              <NavLink to="/automations" className={sidebarLinkClass}>
+                <SidebarIcon name="automations" />
+                <span>{t("nav.automations")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin || isManager ? (
+              <NavLink to="/hr" className={sidebarLinkClass}>
+                <SidebarIcon name="hr" />
+                <span>{t("nav.hr")}</span>
               </NavLink>
             ) : null}
           </SidebarNavSection>
@@ -283,6 +426,24 @@ export function AppLayout() {
               <NavLink to="/branches" className={sidebarLinkClass}>
                 <SidebarIcon name="branches" />
                 <span>{t("nav.branches")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin || isManager ? (
+              <NavLink to="/sync" className={sidebarLinkClass}>
+                <SidebarIcon name="websiteSync" />
+                <span>{t("nav.sync")}</span>
+              </NavLink>
+            ) : null}
+            {isAdmin ? (
+              <NavLink to="/plan" className={sidebarLinkClass}>
+                <SidebarIcon name="plan" />
+                <span>{t("nav.plan")}</span>
+              </NavLink>
+            ) : null}
+            {can("audit") ? (
+              <NavLink to="/audit" className={sidebarLinkClass}>
+                <SidebarIcon name="audit" />
+                <span>{t("nav.auditLogs")}</span>
               </NavLink>
             ) : null}
           </SidebarNavSection>

@@ -1,19 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
-import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useActiveBranchId } from "../context/BranchContext.jsx";
 
 export default function CustomerAccountDetail() {
   const { customerId } = useParams();
   const { t } = useI18n();
-  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [msg, setMsg] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("CASH");
   const [payNote, setPayNote] = useState("");
+  const [busy, setBusy] = useState(false);
   const branchId = useActiveBranchId();
 
   const load = () => {
@@ -33,9 +32,9 @@ export default function CustomerAccountDetail() {
   const submitPay = async (e) => {
     e.preventDefault();
     setMsg("");
+    setBusy(true);
     try {
-      const bid = branchId;
-      if (!bid) {
+      if (!branchId) {
         setMsg(t("receivable.needBranch"));
         return;
       }
@@ -44,7 +43,7 @@ export default function CustomerAccountDetail() {
         body: {
           amount: Number(String(payAmount).replace(",", ".")),
           paymentMethod: payMethod,
-          branchId: bid,
+          branchId,
           note: payNote.trim() || undefined,
         },
       });
@@ -52,16 +51,20 @@ export default function CustomerAccountDetail() {
       setPayNote("");
       setMsg(t("receivable.saved"));
       await load();
-    } catch (e) {
-      setMsg(e.message || t("receivable.payFailed"));
+    } catch (err) {
+      setMsg(err.message || t("receivable.payFailed"));
+    } finally {
+      setBusy(false);
     }
   };
 
   if (!data?.customer) {
     return (
-      <div>
-        <Link to="/customer-accounts">{t("receivable.backCustomers")}</Link>
-        <p>{msg || t("common.loading")}</p>
+      <div className="ca-detail">
+        <Link to="/customers" className="ca-detail__back">
+          {t("receivable.backCustomers")}
+        </Link>
+        <p className="ca-detail__msg">{msg || t("common.loading")}</p>
       </div>
     );
   }
@@ -77,89 +80,116 @@ export default function CustomerAccountDetail() {
   };
 
   return (
-    <div style={{ maxWidth: 960, width: "100%", marginInline: "auto" }}>
-      <p style={{ marginBottom: 12 }}>
-        <Link to="/customer-accounts">{t("receivable.backCustomers")}</Link>
-      </p>
-      <h1 style={{ marginTop: 0 }}>{customer.name}</h1>
-      <p style={{ fontSize: 18, fontWeight: 700 }}>
-        {t("receivable.balance")}: {bal.toFixed(2)} {t("common.currency")}
-      </p>
-      {msg ? <p style={{ color: "var(--muted)" }}>{msg}</p> : null}
+    <div className="ca-detail">
+      <Link to="/customers" className="ca-detail__back">
+        {t("receivable.backCustomers")}
+      </Link>
 
-      {bal > 0.001 ? (
-        <form className="card" onSubmit={submitPay} style={{ marginBottom: 24, display: "grid", gap: 12, maxWidth: 420 }}>
-          <strong>{t("receivable.collect")}</strong>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("receivable.amount")}</span>
-            <input
-              value={payAmount}
-              onChange={(e) => setPayAmount(e.target.value)}
-              inputMode="decimal"
-              required
-              style={{ minHeight: 44, padding: "0 12px", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }}
-            />
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("receivable.method")}</span>
-            <select
-              value={payMethod}
-              onChange={(e) => setPayMethod(e.target.value)}
-              style={{ minHeight: 44, padding: "8px 12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }}
-            >
-              <option value="CASH">{t("payment.cash")}</option>
-              <option value="CARD">{t("payment.card")}</option>
-              <option value="ONLINE">{t("payment.online")}</option>
-            </select>
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("receivable.note")}</span>
-            <input
-              value={payNote}
-              onChange={(e) => setPayNote(e.target.value)}
-              style={{ minHeight: 44, padding: "0 12px", border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }}
-            />
-          </label>
-          <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 240 }}>
-            {t("receivable.submit")}
-          </button>
-        </form>
-      ) : null}
+      <header className="ca-detail__header">
+        <div>
+          <h1 className="ca-detail__title">{customer.name}</h1>
+          <div className="ca-detail__meta">
+            {customer.phone ? <span>{customer.phone}</span> : null}
+            {customer.email ? <span>{customer.email}</span> : null}
+          </div>
+        </div>
+        <div className={`ca-detail__balance${bal > 0.001 ? " ca-detail__balance--due" : ""}`}>
+          <span className="ca-detail__balance-label">{t("receivable.balance")}</span>
+          <strong>
+            {bal.toFixed(2)} {t("common.currency")}
+          </strong>
+        </div>
+      </header>
 
-      <h2 style={{ fontSize: 18 }}>{t("receivable.ledger")}</h2>
-      <div className="card" style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "start" }}>
-              <th style={{ padding: "8px 6px" }}>{t("receivable.colDate")}</th>
-              <th style={{ padding: "8px 6px" }}>{t("receivable.colType")}</th>
-              <th style={{ padding: "8px 6px" }}>{t("receivable.colAmount")}</th>
-              <th style={{ padding: "8px 6px" }}>{t("receivable.colSale")}</th>
-              <th style={{ padding: "8px 6px" }}>{t("receivable.colBy")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(entries || []).map((row) => (
-              <tr key={row.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
-                  {new Date(row.createdAt).toLocaleString()}
-                </td>
-                <td style={{ padding: "8px 6px" }}>{typeLabel(row.entryType)}</td>
-                <td style={{ padding: "8px 6px", fontWeight: 600 }}>
-                  {Number(row.amount).toFixed(2)} {t("common.currency")}
-                </td>
-                <td style={{ padding: "8px 6px" }}>
-                  {row.saleId ? (
-                    <span style={{ fontFamily: "monospace", fontSize: 12 }}>{row.saleId.slice(0, 8)}…</span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td style={{ padding: "8px 6px" }}>{row.createdBy?.name || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {msg ? <p className="ca-detail__msg">{msg}</p> : null}
+
+      <div className="ca-detail__grid">
+        {bal > 0.001 ? (
+          <form className="card ca-detail__collect" onSubmit={submitPay}>
+            <h2>{t("receivable.collect")}</h2>
+            <label className="ca-detail__field">
+              <span>{t("receivable.amount")}</span>
+              <input
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                inputMode="decimal"
+                required
+                disabled={busy}
+              />
+            </label>
+            <label className="ca-detail__field">
+              <span>{t("receivable.method")}</span>
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} disabled={busy}>
+                <option value="CASH">{t("payment.cash")}</option>
+                <option value="CARD">{t("payment.card")}</option>
+                <option value="ONLINE">{t("payment.online")}</option>
+              </select>
+            </label>
+            <label className="ca-detail__field">
+              <span>{t("receivable.note")}</span>
+              <input value={payNote} onChange={(e) => setPayNote(e.target.value)} disabled={busy} />
+            </label>
+            <button type="submit" className="btn-touch ca-detail__submit" disabled={busy}>
+              {busy ? t("common.loading") : t("receivable.submit")}
+            </button>
+          </form>
+        ) : (
+          <div className="card ca-detail__settled">
+            <h2>{t("receivable.collect")}</h2>
+            <p>{t("receivable.settledHint")}</p>
+          </div>
+        )}
+
+        <section className="card ca-detail__ledger">
+          <div className="ca-detail__ledger-head">
+            <h2>{t("receivable.ledger")}</h2>
+            <span>{t("accounts.txnCount", { n: (entries || []).length })}</span>
+          </div>
+          <div className="ca-detail__table-wrap">
+            <table className="ca-detail-table">
+              <thead>
+                <tr>
+                  <th>{t("receivable.colDate")}</th>
+                  <th>{t("receivable.colType")}</th>
+                  <th>{t("receivable.colAmount")}</th>
+                  <th>{t("receivable.colSale")}</th>
+                  <th>{t("receivable.colBy")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(entries || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="ca-detail-table__empty">
+                      {t("receivable.ledgerEmpty")}
+                    </td>
+                  </tr>
+                ) : (
+                  (entries || []).map((row) => (
+                    <tr key={row.id}>
+                      <td className="ca-detail-table__nowrap">{new Date(row.createdAt).toLocaleString()}</td>
+                      <td>
+                        <span className={`ca-type ca-type--${String(row.entryType || "").toLowerCase()}`}>
+                          {typeLabel(row.entryType)}
+                        </span>
+                      </td>
+                      <td className="ca-detail-table__amount">
+                        {Number(row.amount).toFixed(2)} {t("common.currency")}
+                      </td>
+                      <td>
+                        {row.saleId ? (
+                          <code className="ca-detail-table__sale">{row.saleId.slice(0, 10)}…</code>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>{row.createdBy?.name || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </div>
   );

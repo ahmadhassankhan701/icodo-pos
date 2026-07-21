@@ -83,6 +83,25 @@ export default function HrPayrollList() {
                 <Link to={`/hr/payroll/${r.id}`} className="btn-touch" style={{ display: "inline-block", textDecoration: "none" }}>
                   {t("hr.open")}
                 </Link>
+                {r.status === "DRAFT" ? (
+                  <button
+                    type="button"
+                    className="btn-touch"
+                    style={{ marginInlineStart: 8, background: "var(--danger)", color: "#fff" }}
+                    onClick={async () => {
+                      if (!window.confirm(t("hr.confirmDeletePeriod"))) return;
+                      setMsg("");
+                      try {
+                        await api(`/api/payroll/periods/${r.id}`, { method: "DELETE" });
+                        await load();
+                      } catch (e) {
+                        setMsg(e.message || t("hr.saveError"));
+                      }
+                    }}
+                  >
+                    {t("common.delete")}
+                  </button>
+                ) : null}
               </td>
             </tr>
           ))}

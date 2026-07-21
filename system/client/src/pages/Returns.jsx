@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api/client.js";
-import { useAuth } from "../context/AuthContext.jsx";
 import { useOffline } from "../context/OfflineContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import {
@@ -23,7 +23,7 @@ const inp = {
 
 export default function Returns() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const location = useLocation();
   const { refreshPending, online } = useOffline();
   const branchId = useActiveBranchId();
   const [products, setProducts] = useState([]);
@@ -32,6 +32,22 @@ export default function Returns() {
   const [note, setNote] = useState("");
   const [list, setList] = useState([]);
   const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const st = location.state;
+    if (!st || typeof st !== "object") return;
+    if (st.saleId) setSaleId(String(st.saleId));
+    if (st.note) setNote(String(st.note));
+    if (Array.isArray(st.items) && st.items.length) {
+      setLines(
+        st.items.map((it) => ({
+          productId: String(it.productId || ""),
+          quantity: String(it.quantity || "1"),
+        })),
+      );
+      setMsg(t("returns.prefilledFromSale"));
+    }
+  }, [location.state, t]);
 
   useEffect(() => {
     const bid = branchId;
@@ -46,14 +62,14 @@ export default function Returns() {
       return;
     }
     api(`/api/products?${q.toString()}`)
-      .then(async (list) => {
-        setProducts(list);
-        await saveProductsForBranch(bid, list);
-        await hydrateInventoryFromProducts(bid, list);
+      .then(async (rows) => {
+        setProducts(rows);
+        await saveProductsForBranch(bid, rows);
+        await hydrateInventoryFromProducts(bid, rows);
       })
       .catch(async () => {
-        const list = await loadProductsForBranch(bid);
-        setProducts(list);
+        const cached = await loadProductsForBranch(bid);
+        setProducts(cached);
       });
   }, [branchId]);
 
@@ -141,14 +157,16 @@ export default function Returns() {
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>{t("returns.intro")}</p>
 
       <form className="card" onSubmit={submit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("returns.saleIdOptional")}</span>
-          <input value={saleId} onChange={(e) => setSaleId(e.target.value)} placeholder="cuid…" style={inp} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("returns.note")}</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} style={inp} />
-        </label>
+        <div className="page-form-grid">
+          <label className="page-form-field">
+            <span>{t("returns.saleIdOptional")}</span>
+            <input value={saleId} onChange={(e) => setSaleId(e.target.value)} placeholder="cuid…" style={inp} />
+          </label>
+          <label className="page-form-field">
+            <span>{t("returns.note")}</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} style={inp} />
+          </label>
+        </div>
         <strong>{t("returns.lines")}</strong>
         {lines.map((line, i) => (
           <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>

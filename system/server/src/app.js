@@ -39,6 +39,7 @@ import accountingRoutes from "./routes/accounting.js";
 import automationsRoutes from "./routes/automations.js";
 import commissionsRoutes from "./routes/commissions.js";
 import deliveryRoutes from "./routes/delivery.js";
+import planRoutes from "./routes/plan.js";
 import { prisma } from "./lib/prisma.js";
 import {
   dbUnavailableMessage,
@@ -120,6 +121,7 @@ app.use("/api/accounting", accountingRoutes);
 app.use("/api/automations", automationsRoutes);
 app.use("/api/commissions", commissionsRoutes);
 app.use("/api/delivery", deliveryRoutes);
+app.use("/api/plan", planRoutes);
 app.use("/api/refunds", refundRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
