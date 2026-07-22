@@ -45,6 +45,7 @@ export default function PlatformOrganizations() {
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
+  const [editVertical, setEditVertical] = useState("");
   const [planForm, setPlanForm] = useState(emptyPlanForm);
   const [planBusy, setPlanBusy] = useState(false);
 
@@ -93,6 +94,7 @@ export default function PlatformOrganizations() {
     setEditId(o.id);
     setEditName(o.name);
     setEditSlug(o.slug || "");
+    setEditVertical(o.businessVertical || "");
   };
 
   const saveEdit = async () => {
@@ -100,7 +102,11 @@ export default function PlatformOrganizations() {
     setErr("");
     await api(`/api/platform/organizations/${editId}`, {
       method: "PATCH",
-      body: { name: editName, slug: editSlug },
+      body: {
+        name: editName,
+        slug: editSlug,
+        businessVertical: editVertical.trim() || null,
+      },
     });
     setEditId(null);
     await load();
@@ -355,9 +361,19 @@ export default function PlatformOrganizations() {
                         />
                       </td>
                       <td style={td}>
-                        {o.businessVertical
-                          ? t(`register.vertical.${o.businessVertical}`)
-                          : t("common.none")}
+                        <select
+                          value={editVertical}
+                          onChange={(e) => setEditVertical(e.target.value)}
+                          style={inp}
+                          aria-label={t("platform.businessVertical")}
+                        >
+                          <option value="">{t("common.none")}</option>
+                          {BUSINESS_VERTICAL_IDS.filter(isMvpVerticalEnabled).map((id) => (
+                            <option key={id} value={id}>
+                              {t(`register.vertical.${id}`)}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td style={td}>{o.plan || "FREE"}</td>
                       <td style={td}>{o._count?.branches ?? "—"}</td>

@@ -119,7 +119,7 @@ router.post("/organizations", async (req, res, next) => {
 
 router.patch("/organizations/:id", async (req, res, next) => {
   try {
-    const { name, slug } = req.body || {};
+    const { name, slug, businessVertical: bvRaw } = req.body || {};
     const org = await prisma.organization.findUnique({
       where: { id: req.params.id },
     });
@@ -138,6 +138,17 @@ router.patch("/organizations/:id", async (req, res, next) => {
       if (clash) return res.status(409).json({ error: "الرمز مستخدم" });
       data.slug = slugRaw;
     }
+    if (bvRaw !== undefined) {
+      if (bvRaw == null || String(bvRaw).trim() === "") {
+        data.businessVertical = null;
+      } else {
+        const bvNorm = normalizeBusinessVertical(bvRaw, { required: false });
+        if (bvNorm === undefined) {
+          return res.status(400).json({ error: "مجال النشاط غير صالح" });
+        }
+        data.businessVertical = bvNorm;
+      }
+    }
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: "لا توجد حقول للتحديث" });
     }
@@ -149,6 +160,7 @@ router.patch("/organizations/:id", async (req, res, next) => {
         id: true,
         name: true,
         slug: true,
+        businessVertical: true,
         createdAt: true,
         _count: { select: { users: true, branches: true } },
       },

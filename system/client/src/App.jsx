@@ -11,7 +11,6 @@ import Home from "./pages/marketing/Home.jsx";
 import About from "./pages/marketing/About.jsx";
 import Contact from "./pages/marketing/Contact.jsx";
 import POS from "./pages/POS.jsx";
-import Wholesale from "./pages/Wholesale.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
 import Categories from "./pages/Categories.jsx";
@@ -187,16 +186,7 @@ export default function App() {
           }
         >
           <Route path="/pos" element={<Protected permission="pos"><POS /></Protected>} />
-          <Route
-            path="/wholesale"
-            element={
-              <Protected permission="wholesale">
-                <VerticalFeatureGate feature="wholesale">
-                  <Wholesale />
-                </VerticalFeatureGate>
-              </Protected>
-            }
-          />
+          <Route path="/wholesale" element={<Navigate to="/pos" replace />} />
           <Route path="/sync-queue" element={<SyncQueueStatus />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/dashboard" element={<Dashboard />} />

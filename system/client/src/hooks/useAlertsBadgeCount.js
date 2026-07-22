@@ -37,10 +37,13 @@ export function useAlertsBadgeCount() {
     load();
     const id = setInterval(load, 45000);
     const onFocus = () => load();
+    const onAlerts = () => load();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("alerts-changed", onAlerts);
     return () => {
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("alerts-changed", onAlerts);
     };
   }, [load, pendingCount]);
 

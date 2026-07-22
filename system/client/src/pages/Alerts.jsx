@@ -5,7 +5,7 @@ import { useI18n } from "../context/LanguageContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { listSyncQueueRows } from "../offline/syncQueueList.js";
-import { addLocalReadKeys, getLocalReadKeySet } from "../alerts/localRead.js";
+import { addLocalReadKeys, addLocalDismissedKeys, getLocalDismissedKeySet, getLocalReadKeySet } from "../alerts/localRead.js";
 
 const card = {
   padding: 16,
@@ -26,6 +26,7 @@ export default function Alerts() {
   const branchId = useActiveBranchId();
   const nav = useNavigate();
   const [localReadTick, setLocalReadTick] = useState(0);
+  const [clearing, setClearing] = useState(false);
 
   const [typeLow, setTypeLow] = useState(true);
   const [typeExp, setTypeExp] = useState(true);
@@ -84,9 +85,11 @@ export default function Alerts() {
 
   const merged = useMemo(() => {
     const localRead = getLocalReadKeySet();
+    const dismissed = getLocalDismissedKeySet();
     const out = [];
 
     for (const it of serverItems) {
+      if (dismissed.has(it.key)) continue;
       const read = readKeys.has(it.key) || localRead.has(it.key);
       out.push({ ...it, source: "server", read });
     }
@@ -94,6 +97,7 @@ export default function Alerts() {
     if (typeSync) {
       for (const row of syncRows) {
         const key = `sync-local:${row.localId}`;
+        if (dismissed.has(key)) continue;
         const read = localRead.has(key);
         const hasIssue = !!(row.lastError || (row.retryCount ?? 0) > 0);
         const severity = hasIssue ? "warning" : "info";
@@ -218,8 +222,36 @@ export default function Alerts() {
       if (syncKeys.length) addLocalReadKeys(syncKeys);
       setLocalReadTick((x) => x + 1);
       await load();
+      window.dispatchEvent(new Event("alerts-changed"));
     } catch (e) {
       setMsg(String(e?.message || e));
+    }
+  };
+
+  const onClearAll = async () => {
+    if (merged.length === 0) return;
+    setMsg("");
+    setClearing(true);
+    try {
+      const keys = merged.map((it) => it.key);
+      if (!skipServerTypes) {
+        await api("/api/notifications/mark-all-read", {
+          method: "POST",
+          body: {
+            branchId: branchId || undefined,
+            types: typesParam || undefined,
+          },
+        });
+      }
+      addLocalDismissedKeys(keys);
+      setLocalReadTick((x) => x + 1);
+      setMsg(t("alerts.cleared"));
+      await load();
+      window.dispatchEvent(new Event("alerts-changed"));
+    } catch (e) {
+      setMsg(String(e?.message || e));
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -275,6 +307,15 @@ export default function Alerts() {
         </span>
         <button type="button" className="btn-touch" onClick={onMarkAllRead} disabled={unreadCount === 0}>
           {t("alerts.markAllRead")}
+        </button>
+        <button
+          type="button"
+          className="btn-touch"
+          onClick={onClearAll}
+          disabled={merged.length === 0 || clearing}
+          style={{ background: "var(--danger)", color: "#fff" }}
+        >
+          {clearing ? t("common.loading") : t("alerts.clearAll")}
         </button>
       </div>
 

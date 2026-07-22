@@ -139,7 +139,7 @@ export function AppLayout() {
   const location = useLocation();
   const { count: alertsBadge } = useAlertsBadgeCount();
 
-  const isPosRoute = location.pathname === "/pos" || location.pathname === "/wholesale";
+  const isPosRoute = location.pathname === "/pos";
 
   const [openSections, setOpenSections] = useState(() =>
     initialOpenSections(typeof window !== "undefined" ? window.location.pathname : ""),
@@ -248,13 +248,6 @@ export function AppLayout() {
             <NavLink to="/pos" className={sidebarLinkClass} end>
               <SidebarIcon name="pos" />
               <span>{t("nav.pos")}</span>
-            </NavLink>
-          ) : null}
-
-          {can("wholesale") && isVerticalFeatureEnabled("wholesale", bv) ? (
-            <NavLink to="/wholesale" className={sidebarLinkClass}>
-              <SidebarIcon name="wholesale" />
-              <span>{t("nav.wholesale")}</span>
             </NavLink>
           ) : null}
 

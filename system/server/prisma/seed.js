@@ -8,11 +8,16 @@ const ORG_ID = "seed-org-default";
 async function main() {
   await prisma.organization.upsert({
     where: { id: ORG_ID },
-    update: { name: "المتجر الافتراضي", slug: "ezoo" },
+    update: {
+      name: "المتجر الافتراضي",
+      slug: "ezoo",
+      businessVertical: "GROCERY",
+    },
     create: {
       id: ORG_ID,
       name: "المتجر الافتراضي",
       slug: "ezoo",
+      businessVertical: "GROCERY",
     },
   });
 

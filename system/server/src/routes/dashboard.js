@@ -88,11 +88,11 @@ router.get("/summary", async (req, res) => {
     where: {
       sale: { ...branchFilter, createdAt: { gte: startOfMonth() } },
     },
-    include: { product: { select: { id: true, name: true } } },
+    include: { product: { select: { id: true, name: true, cost: true } } },
   });
   const costMonth = itemsMonth.reduce((acc, it) => {
-    const c = it.product && "cost" in it.product ? Number(it.product.cost || 0) * it.quantity : 0;
-    return acc + c;
+    const unitCost = it.product?.cost != null ? Number(it.product.cost) : 0;
+    return acc + unitCost * Number(it.quantity || 0);
   }, 0);
 
   res.json({

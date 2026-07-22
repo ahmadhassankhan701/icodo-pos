@@ -21,6 +21,7 @@ import { useI18n } from "../context/LanguageContext.jsx";
 import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
 import { printPaperClass } from "../utils/printPaper.js";
+import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 
 const tooltipStyle = {
   background: "var(--surface)",
@@ -45,6 +46,8 @@ export default function Dashboard() {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const branchId = useActiveBranchId();
+  const showWholesale = isVerticalFeatureEnabled("wholesale", user?.businessVertical);
+  const showServices = isVerticalFeatureEnabled("appointments", user?.businessVertical);
   const [query, setQuery] = useState("");
   const [summary, setSummary] = useState(null);
   const [byProduct, setByProduct] = useState([]);
@@ -204,15 +207,17 @@ export default function Dashboard() {
                     <span>{t("dashboard.profitMonth")}</span>
                   </div>
                 </div>
-                <div className="dash-mini-kpi">
-                  <span className="dash-mini-ico tone-violet">
-                    <DashIcon name="box" size={18} />
-                  </span>
-                  <div>
-                    <strong>{cur(summary.wholesaleMonthTotal ?? 0)}</strong>
-                    <span>{t("dashboard.wholesaleMonth")}</span>
+                {showWholesale ? (
+                  <div className="dash-mini-kpi">
+                    <span className="dash-mini-ico tone-violet">
+                      <DashIcon name="box" size={18} />
+                    </span>
+                    <div>
+                      <strong>{cur(summary.wholesaleMonthTotal ?? 0)}</strong>
+                      <span>{t("dashboard.wholesaleMonth")}</span>
+                    </div>
                   </div>
-                </div>
+                ) : null}
                 <div className="dash-mini-kpi">
                   <span className="dash-mini-ico tone-warn">
                     <DashIcon name="alert" size={18} />
@@ -388,22 +393,24 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <TopTenList
-                title={t("dashboard.topServicesMonth")}
-                emptyLabel={t("dashboard.topTenEmpty")}
-                metricLabel={t("dashboard.topServicesMetric")}
-                variant="compact"
-                rows={topServices.slice(0, 5).map((r, i) => ({
-                  name: r.name,
-                  value: cur(r.value),
-                  sub:
-                    r.count != null
-                      ? t("dashboard.topServicesCount", { count: String(r.count) })
-                      : undefined,
-                  status: "active",
-                  statusLabel: t("dashboard.statusActive"),
-                }))}
-              />
+              {showServices ? (
+                <TopTenList
+                  title={t("dashboard.topServicesMonth")}
+                  emptyLabel={t("dashboard.topTenEmpty")}
+                  metricLabel={t("dashboard.topServicesMetric")}
+                  variant="compact"
+                  rows={topServices.slice(0, 5).map((r, i) => ({
+                    name: r.name,
+                    value: cur(r.value),
+                    sub:
+                      r.count != null
+                        ? t("dashboard.topServicesCount", { count: String(r.count) })
+                        : undefined,
+                    status: "active",
+                    statusLabel: t("dashboard.statusActive"),
+                  }))}
+                />
+              ) : null}
             </aside>
           </div>
         )}

@@ -44,7 +44,7 @@ function productHasModifiers(p) {
 
 export default function POS() {
   const { classFor } = usePrintSettings();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const { refreshPending } = useOffline();
   const { t, locale } = useI18n();
   const branchId = useActiveBranchId();
@@ -99,7 +99,10 @@ export default function POS() {
       ),
     [products]
   );
-  const showWholesaleToggle = hasWholesaleCatalog;
+  const showWholesaleToggle =
+    hasWholesaleCatalog &&
+    can("wholesale") &&
+    isVerticalFeatureEnabled("wholesale", user?.businessVertical);
   const addProduct = useCartStore((s) => s.addProduct);
   const setQty = useCartStore((s) => s.setQuantity);
   const removeLine = useCartStore((s) => s.removeLine);
@@ -391,6 +394,18 @@ export default function POS() {
     setSplitRows((rows) => rows.map((r, j) => (j === idx ? { ...r, amount: rem > 0 ? String(rem) : "" } : r)));
   };
 
+  const splitSum = useMemo(
+    () =>
+      round2(
+        splitRows.reduce(
+          (s, r) => s + (round2(Number.parseFloat(String(r.amount).replace(",", ".")) || 0)),
+          0,
+        ),
+      ),
+    [splitRows],
+  );
+  const splitRemaining = round2(amountDue - splitSum);
+
   const addSplitRow = () => {
     setSplitRows((rows) => [...rows, { method: "ONLINE", amount: "" }]);
   };
@@ -502,7 +517,32 @@ export default function POS() {
         setMsg(t("pos.splitMismatch"));
         return;
       }
+      const badSplit = parsed.some((r) => !["CASH", "CARD", "ONLINE"].includes(r.method));
+      if (badSplit) {
+        setMsg(t("pos.splitMethodsOnly"));
+        return;
+      }
       paymentSplits = parsed;
+    }
+
+    if (
+      !paymentSplits &&
+      ["CASH", "CARD", "ONLINE"].includes(paymentMethod) &&
+      payNowInput.trim() !== ""
+    ) {
+      const paidNow = round2(Number.parseFloat(String(payNowInput).replace(",", ".")) || 0);
+      if (Number.isNaN(paidNow) || paidNow < 0) {
+        setMsg(t("pos.payNowInvalid"));
+        return;
+      }
+      if (paidNow - amountDue > 0.02) {
+        setMsg(t("pos.payNowExceeds"));
+        return;
+      }
+      if (amountDue - paidNow > 0.02 && !customerId) {
+        setMsg(t("pos.payNowNeedCustomer"));
+        return;
+      }
     }
 
     const body = {
@@ -574,6 +614,7 @@ export default function POS() {
           taxAmount: round2(taxPreview),
           paymentMethod,
           paymentSplits,
+          amountPaid: body.amountPaid,
           customer: cust ? { id: cust.id, name: cust.name, phone: cust.phone || undefined } : null,
           tableNumber: showCafeExtras && tableNumber.trim() ? tableNumber.trim() : null,
           orderNote: showCafeExtras && orderNote.trim() ? orderNote.trim() : null,
@@ -1144,6 +1185,21 @@ export default function POS() {
                 </button>
                 <div style={{ fontSize: 13, color: "var(--muted)" }}>
                   {t("pos.afterDiscount")}: {amountDue.toFixed(2)} {t("common.currency")}
+                  {" · "}
+                  {t("pos.splitSum")}: {splitSum.toFixed(2)}
+                  {Math.abs(splitRemaining) > 0.009 ? (
+                    <span style={{ color: splitRemaining > 0 ? "var(--warn, #b45309)" : "var(--danger)" }}>
+                      {" · "}
+                      {splitRemaining > 0
+                        ? t("pos.splitLeft", { n: splitRemaining.toFixed(2) })
+                        : t("pos.splitOver", { n: Math.abs(splitRemaining).toFixed(2) })}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--success, #15803d)" }}>
+                      {" · "}
+                      {t("pos.splitBalanced")}
+                    </span>
+                  )}
                 </div>
               </div>
             )}

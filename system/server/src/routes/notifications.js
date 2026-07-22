@@ -152,7 +152,7 @@ async function buildItems(req, types) {
           lotId: lot.id,
           imageUrl: resolveStoredImageUrl(lot.product.imageUrl),
         },
-        action: { path: "/products", hash: "lots" },
+        action: { path: "/inventory-lots" },
       });
     }
 

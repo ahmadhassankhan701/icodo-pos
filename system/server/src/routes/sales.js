@@ -26,6 +26,8 @@ router.use(authMiddleware);
 
 const OK_PAY = new Set(["CASH", "CARD", "ONLINE", "ON_DELIVERY", "ON_ACCOUNT"]);
 const SALE_FILTER_PAY = new Set([...OK_PAY, "SPLIT"]);
+/** Split tender lines — cash-like methods only (matches POS UI). */
+const SPLIT_PAY = new Set(["CASH", "CARD", "ONLINE"]);
 
 function roundMoney(n) {
   return Math.round(n * 100) / 100;
@@ -60,8 +62,10 @@ function normalizePaymentSplits(splits, expectedTotal) {
   let sum = 0;
   for (const row of splits) {
     const m = String(row?.method || "").toUpperCase();
-    if (!OK_PAY.has(m)) {
-      throw new Error("طريقة دفع غير صالحة في التقسيم");
+    if (!SPLIT_PAY.has(m)) {
+      throw new Error(
+        "تقسيم الدفع يقتصر على نقد / بطاقة / إلكتروني — لا يُسمح بالآجل أو الدفع عند الاستلام داخل التقسيم",
+      );
     }
     const raw = String(row?.amount ?? "").replace(",", ".");
     const amt = Number.parseFloat(raw);
@@ -360,8 +364,9 @@ router.post("/checkout", async (req, res) => {
       amountPaidNum = grandNum;
       amountDueNum = 0;
     } else if (pm === "ON_DELIVERY") {
-      amountPaidNum = grandNum;
-      amountDueNum = 0;
+      // Not collected at till — keep invoice open until cash is received.
+      amountPaidNum = 0;
+      amountDueNum = grandNum;
     } else if (pm === "ON_ACCOUNT") {
       amountPaidNum = 0;
       amountDueNum = grandNum;
@@ -620,7 +625,7 @@ router.post("/checkout", async (req, res) => {
         });
       }
 
-      if (amountDueNum > 0.01 && customerIdFinal) {
+      if (amountDueNum > 0.01 && customerIdFinal && pm !== "ON_DELIVERY") {
         const dueDec = new Prisma.Decimal(amountDueNum.toFixed(2));
         await tx.customerAccountLedger.create({
           data: {
