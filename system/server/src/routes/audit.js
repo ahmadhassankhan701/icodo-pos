@@ -1,19 +1,23 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requirePermission } from "../middleware/auth.js";
 
 const router = Router();
 router.use(authMiddleware);
-router.use(requireRole("ADMIN", "MANAGER"));
+router.use(requirePermission("audit"));
 
 router.get("/", async (req, res) => {
   const { branchId, limit = "100", action } = req.query;
   const orgId = req.user.organizationId;
+  // Scope to this org via user (preferred) or branch — avoid cross-org bleed
+  // when a log somehow has mismatched user/branch orgs.
   const andParts = [
     {
       OR: [
-        { branch: { organizationId: orgId } },
         { user: { organizationId: orgId } },
+        {
+          AND: [{ userId: null }, { branch: { organizationId: orgId } }],
+        },
       ],
     },
   ];

@@ -730,45 +730,66 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
     throw e;
   }
 
+  const stockQty = Math.max(0, Math.floor(Number(initialStock) || 0));
   let product;
   try {
-    product = await prisma.product.create({
-    data: {
-      organizationId: req.user.organizationId,
-      name: nameLocal || nameEn.trim(),
-      nameEn: nameEn.trim(),
-      description: description?.trim() || null,
-      sku: catalog.sku,
-      barcode: barcodeTrim,
-      price: new Prisma.Decimal(priceNum),
-      wholesalePrice:
-        wholesalePrice != null && wholesalePrice !== ""
-          ? new Prisma.Decimal(Number(wholesalePrice))
-          : null,
-      cost:
-        cost != null && cost !== ""
-          ? new Prisma.Decimal(Number(cost))
-          : null,
-      petType: ["CAT", "DOG", "OTHER"].includes(String(petType))
-        ? String(petType)
-        : "OTHER",
-      category: catalog.category,
-      categoryId: catalog.categoryId,
-      subcategoryId: catalog.subcategoryId,
-      imageUrl: imageTrim,
-      expiryDate,
-      expiryAlertDaysBefore: null,
-      ...(modifiers ? { modifiers } : {}),
-      inventories: {
-        create: {
-          branchId: bid,
-          quantity: Math.max(0, Number(initialStock) || 0),
-          minStockLevel: Math.max(0, Number(minStockLevel) || 5),
+    product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          organizationId: req.user.organizationId,
+          name: nameLocal || nameEn.trim(),
+          nameEn: nameEn.trim(),
+          description: description?.trim() || null,
+          sku: catalog.sku,
+          barcode: barcodeTrim,
+          price: new Prisma.Decimal(priceNum),
+          wholesalePrice:
+            wholesalePrice != null && wholesalePrice !== ""
+              ? new Prisma.Decimal(Number(wholesalePrice))
+              : null,
+          cost:
+            cost != null && cost !== ""
+              ? new Prisma.Decimal(Number(cost))
+              : null,
+          petType: ["CAT", "DOG", "OTHER"].includes(String(petType))
+            ? String(petType)
+            : "OTHER",
+          category: catalog.category,
+          categoryId: catalog.categoryId,
+          subcategoryId: catalog.subcategoryId,
+          imageUrl: imageTrim,
+          expiryDate,
+          expiryAlertDaysBefore: null,
+          ...(modifiers ? { modifiers } : {}),
+          inventories: {
+            create: {
+              branchId: bid,
+              quantity: stockQty,
+              minStockLevel: Math.max(0, Number(minStockLevel) || 5),
+            },
+          },
         },
-      },
-    },
-    include: { inventories: true },
-  });
+        include: { inventories: true },
+      });
+      // Keep aggregate stock and expiry lots aligned from day one.
+      if (stockQty > 0) {
+        await tx.inventoryLot.create({
+          data: {
+            organizationId: req.user.organizationId,
+            productId: created.id,
+            branchId: bid,
+            receivedAt: new Date(),
+            expiryDate,
+            quantityReceived: stockQty,
+            quantityOnHand: stockQty,
+            unitCost:
+              cost != null && cost !== "" ? new Prisma.Decimal(Number(cost)) : null,
+            note: "initial-stock",
+          },
+        });
+      }
+      return created;
+    });
   } catch (e) {
     if (e?.code === "P2002") {
       return res.status(400).json({
@@ -784,7 +805,7 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
       {
         branchId: bid,
         productId: product.id,
-        quantityDelta: Math.max(0, Number(initialStock) || 0),
+        quantityDelta: stockQty,
       },
     ],
   });

@@ -3,6 +3,7 @@ import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useActiveBranchId } from "../context/BranchContext.jsx";
+import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 
 const inp = {
   padding: 12,
@@ -23,6 +24,7 @@ export default function Appointments() {
   const { t } = useI18n();
   const { user } = useAuth();
   const branchId = useActiveBranchId();
+  const showPetFields = isVerticalFeatureEnabled("petPosFilters", user?.businessVertical);
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [services, setServices] = useState([]);
@@ -82,15 +84,25 @@ export default function Appointments() {
 
   const createService = async () => {
     const bid = branchId;
+    if (!bid) {
+      setMsg(t("appointments.needBranch"));
+      return;
+    }
     const name = window.prompt(t("appointments.promptServiceName"));
     if (!name?.trim()) return;
     const durationMin = Number(window.prompt(t("appointments.promptDuration"), "60") || "60");
     const price = Number(window.prompt(t("appointments.promptPrice"), "80") || "0");
-    const row = await api("/api/appointments/services", {
-      method: "POST",
-      body: { branchId: bid, name: name.trim(), durationMin, price },
-    });
-    setServices((prev) => [...prev, row].sort((a, b) => a.name.localeCompare(b.name)));
+    setMsg("");
+    try {
+      const row = await api("/api/appointments/services", {
+        method: "POST",
+        body: { branchId: bid, name: name.trim(), durationMin, price },
+      });
+      setServices((prev) => [...prev, row].sort((a, b) => a.name.localeCompare(b.name)));
+      setMsg(t("appointments.msgServiceCreated"));
+    } catch (x) {
+      setMsg(x.message || t("appointments.msgCreateFail"));
+    }
   };
 
   const onServiceChange = (serviceId) => {
@@ -191,21 +203,25 @@ export default function Appointments() {
               </option>
             ))}
           </select>
-          <input
-            style={{ ...inp, minWidth: 150 }}
-            value={form.petName}
-            onChange={(e) => setForm((f) => ({ ...f, petName: e.target.value }))}
-            placeholder={t("appointments.petNamePh")}
-          />
-          <select
-            value={form.petType}
-            onChange={(e) => setForm((f) => ({ ...f, petType: e.target.value }))}
-            style={{ ...inp, minWidth: 120 }}
-          >
-            <option value="CAT">CAT</option>
-            <option value="DOG">DOG</option>
-            <option value="OTHER">OTHER</option>
-          </select>
+          {showPetFields ? (
+            <>
+              <input
+                style={{ ...inp, minWidth: 150 }}
+                value={form.petName}
+                onChange={(e) => setForm((f) => ({ ...f, petName: e.target.value }))}
+                placeholder={t("appointments.petNamePh")}
+              />
+              <select
+                value={form.petType}
+                onChange={(e) => setForm((f) => ({ ...f, petType: e.target.value }))}
+                style={{ ...inp, minWidth: 120 }}
+              >
+                <option value="CAT">CAT</option>
+                <option value="DOG">DOG</option>
+                <option value="OTHER">OTHER</option>
+              </select>
+            </>
+          ) : null}
           <input
             type="datetime-local"
             value={form.startAt}

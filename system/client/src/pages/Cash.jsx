@@ -14,8 +14,9 @@ const inp = {
 
 export default function Cash() {
   const { t } = useI18n();
-  const { user, isManager } = useAuth();
+  const { can } = useAuth();
   const branchId = useActiveBranchId();
+  const canOperate = can("cashSession");
   const [openSession, setOpenSession] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [openingFloat, setOpeningFloat] = useState("0");
@@ -55,6 +56,7 @@ export default function Cash() {
       await loadOpen();
       await loadList();
       setMsg(t("cash.opened"));
+      window.dispatchEvent(new Event("alerts-changed"));
     } catch (x) {
       setMsg(x.message || t("cash.failed"));
     }
@@ -77,6 +79,7 @@ export default function Cash() {
       await loadOpen();
       await loadList();
       setMsg(t("cash.closed"));
+      window.dispatchEvent(new Event("alerts-changed"));
     } catch (x) {
       setMsg(x.message || t("cash.failed"));
     }
@@ -106,11 +109,12 @@ export default function Cash() {
         )}
       </div>
 
-      {isManager ? (
+      {canOperate ? (
         <>
           {!openSession ? (
             <form className="card" onSubmit={openShift} style={{ display: "grid", gap: 12 }}>
               <strong>{t("cash.openForm")}</strong>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>{t("cash.openRequiredHint")}</p>
               <div className="page-form-grid">
                 <label className="page-form-field">
                   <span>{t("cash.openingFloat")}</span>
@@ -155,7 +159,7 @@ export default function Cash() {
           )}
         </>
       ) : (
-        <p style={{ color: "var(--muted)", fontSize: 14 }}>{t("cash.cashierHint")}</p>
+        <p style={{ color: "var(--muted)", fontSize: 14 }}>{t("cash.noPermissionHint")}</p>
       )}
 
       {msg ? <div style={{ color: "var(--muted)" }}>{msg}</div> : null}

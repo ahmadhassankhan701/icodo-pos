@@ -22,7 +22,7 @@ router.get("/", async (req, res) => {
       items: { include: { product: { select: { id: true, name: true, sku: true } } } },
       branch: { select: { name: true } },
       user: { select: { name: true } },
-      sale: { select: { id: true, total: true, createdAt: true } },
+      sale: { select: { id: true, total: true, createdAt: true, invoiceNumber: true } },
     },
   });
   res.json(rows);
@@ -78,33 +78,102 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
   }
 
   let saleRef = null;
+  let saleItemsByProduct = null;
   if (saleId != null && String(saleId).trim()) {
     saleRef = await prisma.sale.findFirst({
       where: { id: String(saleId), branch: { organizationId: orgId } },
+      include: {
+        items: {
+          include: {
+            lotUsages: {
+              select: { inventoryLotId: true, quantity: true },
+            },
+          },
+        },
+      },
     });
     if (!saleRef) return res.status(400).json({ error: "فاتورة غير موجودة" });
     if (saleRef.branchId !== bid) return res.status(400).json({ error: "الفاتورة من فرع آخر" });
+
+    const priorRefunds = await prisma.refund.findMany({
+      where: { saleId: saleRef.id, branch: { organizationId: orgId } },
+      include: { items: true },
+    });
+    const alreadyRefunded = new Map();
+    for (const r of priorRefunds) {
+      for (const it of r.items) {
+        alreadyRefunded.set(
+          it.productId,
+          (alreadyRefunded.get(it.productId) || 0) + Number(it.quantity || 0),
+        );
+      }
+    }
+
+    saleItemsByProduct = new Map();
+    for (const it of saleRef.items) {
+      const prev = saleItemsByProduct.get(it.productId) || {
+        quantity: 0,
+        unitPrice: it.unitPrice,
+        lotUsages: [],
+      };
+      prev.quantity += Number(it.quantity || 0);
+      prev.lotUsages.push(...(it.lotUsages || []));
+      saleItemsByProduct.set(it.productId, prev);
+    }
+
+    for (const [productId, meta] of saleItemsByProduct) {
+      const left = meta.quantity - (alreadyRefunded.get(productId) || 0);
+      saleItemsByProduct.set(productId, { ...meta, remaining: Math.max(0, left) });
+    }
   }
 
   try {
+    // Aggregate duplicate refund lines
+    const qtyByProduct = new Map();
+    for (const line of items) {
+      const productId = String(line?.productId || "");
+      if (!productId) continue;
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+      qtyByProduct.set(productId, (qtyByProduct.get(productId) || 0) + qty);
+    }
+    if (!qtyByProduct.size) throw new Error("لا توجد أصناف للإرجاع");
+
     let total = new Prisma.Decimal(0);
     const lineData = [];
 
-    for (const line of items) {
-      const productId = line.productId;
-      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+    for (const [productId, qty] of qtyByProduct) {
       const product = await prisma.product.findFirst({
         where: { id: productId, organizationId: orgId },
       });
       if (!product) throw new Error(`منتج غير موجود: ${productId}`);
-      const unitPrice = product.price;
+
+      let unitPrice = product.price;
+      if (saleItemsByProduct) {
+        const sold = saleItemsByProduct.get(productId);
+        if (!sold) {
+          throw new Error(`المنتج غير موجود في الفاتورة: ${product.name}`);
+        }
+        if (qty > sold.remaining) {
+          throw new Error(
+            `كمية الإرجاع تتجاوز المتاح من الفاتورة لـ ${product.name} (متبقي ${sold.remaining})`,
+          );
+        }
+        unitPrice = sold.unitPrice;
+      }
+
       const subtotal = unitPrice.mul(qty);
       total = total.add(subtotal);
-      lineData.push({ productId, quantity: qty, unitPrice, subtotal });
+      lineData.push({
+        productId,
+        quantity: qty,
+        unitPrice,
+        subtotal,
+        saleLots: saleItemsByProduct?.get(productId)?.lotUsages || [],
+      });
     }
 
-    const refundResults = await prisma.$transaction([
-      prisma.refund.create({
+    const refund = await prisma.$transaction(async (tx) => {
+      const created = await tx.refund.create({
         data: {
           branchId: bid,
           userId: req.user.sub,
@@ -122,9 +191,10 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
           },
         },
         include: refundInclude,
-      }),
-      ...lineData.map((l) =>
-        prisma.inventory.upsert({
+      });
+
+      for (const l of lineData) {
+        await tx.inventory.upsert({
           where: {
             productId_branchId: { productId: l.productId, branchId: bid },
           },
@@ -137,11 +207,60 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
           update: {
             quantity: { increment: l.quantity },
           },
-        }),
-      ),
-    ]);
+        });
 
-    const refund = refundResults[0];
+        // Restore FEFO lots from original sale when possible; otherwise create a return lot.
+        let left = l.quantity;
+        const usages = [...(l.saleLots || [])].reverse(); // restore last consumed first
+        for (const u of usages) {
+          if (left <= 0) break;
+          const take = Math.min(left, Number(u.quantity || 0));
+          if (take <= 0) continue;
+          const lot = await tx.inventoryLot.findFirst({
+            where: { id: u.inventoryLotId, organizationId: orgId },
+          });
+          if (!lot) continue;
+          if (lot.branchId === bid) {
+            await tx.inventoryLot.update({
+              where: { id: lot.id },
+              data: { quantityOnHand: { increment: take } },
+            });
+          } else {
+            await tx.inventoryLot.create({
+              data: {
+                organizationId: orgId,
+                productId: l.productId,
+                branchId: bid,
+                receivedAt: new Date(),
+                expiryDate: lot.expiryDate,
+                quantityReceived: take,
+                quantityOnHand: take,
+                unitCost: lot.unitCost,
+                note: `refund-restore:${created.id}`,
+              },
+            });
+          }
+          left -= take;
+        }
+        if (left > 0) {
+          await tx.inventoryLot.create({
+            data: {
+              organizationId: orgId,
+              productId: l.productId,
+              branchId: bid,
+              receivedAt: new Date(),
+              expiryDate: null,
+              quantityReceived: left,
+              quantityOnHand: left,
+              unitCost: null,
+              note: `refund:${created.id}`,
+            },
+          });
+        }
+      }
+
+      return created;
+    });
 
     await writeAudit({
       userId: req.user.sub,
@@ -150,7 +269,7 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
       entityId: refund.id,
       branchId: bid,
       summary: `Refund total ${refund.total}`,
-      meta: { lines: refund.items?.length },
+      meta: { lines: refund.items?.length, saleId: saleRef?.id ?? null },
     });
 
     scheduleInventoryWebhook(orgId, {

@@ -9,8 +9,10 @@ const emptyForm = () => ({ name: "", phone: "", email: "", notes: "", accountBal
 
 export default function Customers() {
   const { t } = useI18n();
-  const { isAdmin, isManager, user } = useAuth();
-  const showReceivable = isVerticalFeatureEnabled("customerAccounts", user?.businessVertical);
+  const { isAdmin, isManager, can, user } = useAuth();
+  const showReceivable =
+    can("receivables") && isVerticalFeatureEnabled("customerAccounts", user?.businessVertical);
+  const showOpeningBalance = isManager;
   const [list, setList] = useState([]);
   const [q, setQ] = useState("");
   const [form, setForm] = useState(emptyForm);
@@ -39,7 +41,9 @@ export default function Customers() {
           phone: form.phone,
           email: form.email,
           notes: form.notes,
-          ...(balRaw !== "" ? { accountBalance: Number(balRaw.replace(",", ".")) } : {}),
+          ...(showOpeningBalance && balRaw !== ""
+            ? { accountBalance: Number(balRaw.replace(",", ".")) }
+            : {}),
         },
       });
       setForm(emptyForm());
@@ -121,14 +125,16 @@ export default function Customers() {
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-          <input
-            placeholder={t("customers.balancePlaceholder")}
-            type="number"
-            min={0}
-            step="0.01"
-            value={form.accountBalance}
-            onChange={(e) => setForm({ ...form, accountBalance: e.target.value })}
-          />
+          {showOpeningBalance ? (
+            <input
+              placeholder={t("customers.balancePlaceholder")}
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.accountBalance}
+              onChange={(e) => setForm({ ...form, accountBalance: e.target.value })}
+            />
+          ) : null}
           <input
             placeholder={t("customers.notes")}
             value={form.notes}

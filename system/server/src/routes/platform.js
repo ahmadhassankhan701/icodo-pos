@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
 import { findBranchInOrg } from "../lib/orgScope.js";
+import { findOrganizationOwnerId, isOrganizationOwner } from "../lib/orgOwner.js";
 import {
   dbUnavailableMessage,
   isDbUnavailableError,
@@ -320,6 +321,9 @@ router.post("/users", async (req, res, next) => {
     if (!organizationId?.trim() || !email?.trim() || !password || !name?.trim()) {
       return res.status(400).json({ error: "المؤسسة والبريد والاسم وكلمة المرور مطلوبة" });
     }
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: "كلمة المرور يجب ألا تقل عن 6 أحرف" });
+    }
     if (!["ADMIN", "MANAGER", "CASHIER"].includes(String(role))) {
       return res.status(400).json({ error: "دور غير صالح" });
     }
@@ -329,9 +333,25 @@ router.post("/users", async (req, res, next) => {
     });
     if (!org) return res.status(400).json({ error: "مؤسسة غير موجودة" });
 
-    if (branchId) {
-      const b = await findBranchInOrg(prisma, org.id, branchId);
+    const roleStr = String(role);
+    const resolvedBranchId =
+      branchId != null && String(branchId).trim() ? String(branchId).trim() : null;
+    if (roleStr !== "ADMIN" && !resolvedBranchId) {
+      return res.status(400).json({ error: "يجب تعيين فرع للمستخدم" });
+    }
+    if (resolvedBranchId) {
+      const b = await findBranchInOrg(prisma, org.id, resolvedBranchId);
       if (!b) return res.status(400).json({ error: "فرع غير صالح" });
+    }
+
+    const maxUsers = 10;
+    const userCount = await prisma.user.count({ where: { organizationId: org.id } });
+    if (userCount >= maxUsers) {
+      return res.status(403).json({
+        error: `تم بلوغ الحد الأقصى للمستخدمين (${maxUsers})`,
+        code: "USER_LIMIT",
+        maxUsers,
+      });
     }
 
     const hash = await bcrypt.hash(String(password), 10);
@@ -342,8 +362,8 @@ router.post("/users", async (req, res, next) => {
         passwordHash: hash,
         name: name.trim(),
         nameEn: nameEn?.trim() || null,
-        role: String(role),
-        branchId: branchId || null,
+        role: roleStr,
+        branchId: resolvedBranchId,
       },
       select: {
         id: true,
@@ -374,6 +394,13 @@ router.patch("/users/:id", async (req, res, next) => {
     });
     if (!target) return res.status(404).json({ error: "غير موجود" });
 
+    if (await isOrganizationOwner(prisma, target.organizationId, target.id)) {
+      return res.status(403).json({
+        error: "لا يمكن تعديل حساب مالك المؤسسة (المشرف الأعلى)",
+        code: "ORG_OWNER_LOCKED",
+      });
+    }
+
     if (branchId) {
       const b = await findBranchInOrg(prisma, target.organizationId, branchId);
       if (!b) return res.status(400).json({ error: "فرع غير صالح" });
@@ -386,7 +413,17 @@ router.patch("/users/:id", async (req, res, next) => {
       data.role = String(role);
     }
     if (branchId !== undefined) data.branchId = branchId || null;
-    if (password) data.passwordHash = await bcrypt.hash(String(password), 10);
+    const nextRole = data.role || target.role;
+    const nextBranch = branchId !== undefined ? branchId || null : target.branchId;
+    if (nextRole !== "ADMIN" && !nextBranch) {
+      return res.status(400).json({ error: "يجب تعيين فرع للمستخدم" });
+    }
+    if (password) {
+      if (String(password).length < 6) {
+        return res.status(400).json({ error: "كلمة المرور يجب ألا تقل عن 6 أحرف" });
+      }
+      data.passwordHash = await bcrypt.hash(String(password), 10);
+    }
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: "لا توجد حقول للتحديث" });
@@ -422,6 +459,12 @@ router.delete("/users/:id", async (req, res, next) => {
       where: { id: req.params.id },
     });
     if (!target) return res.status(404).json({ error: "غير موجود" });
+    if (await isOrganizationOwner(prisma, target.organizationId, target.id)) {
+      return res.status(403).json({
+        error: "لا يمكن حذف حساب مالك المؤسسة (المشرف الأعلى)",
+        code: "ORG_OWNER_LOCKED",
+      });
+    }
     await prisma.user.delete({ where: { id: target.id } });
     res.status(204).send();
   } catch (e) {

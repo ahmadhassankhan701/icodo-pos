@@ -62,14 +62,12 @@ router.get("/snapshot", async (req, res) => {
       stockValueAtCost += row.quantity * cost;
     }
 
-    const recAgg = await prisma.customer.aggregate({
-      where: { organizationId: orgId },
-      _sum: { accountBalance: true },
-    });
-    const receivables = round2(Number(recAgg._sum.accountBalance ?? 0));
-
     const loanRows = await prisma.employeeLoan.findMany({
-      where: { organizationId: orgId, status: "OPEN" },
+      where: {
+        organizationId: orgId,
+        status: "OPEN",
+        ...(branchFilter ? { employee: { branchId: branchFilter } } : {}),
+      },
       select: { principal: true, paidAmount: true },
     });
     let employeeLoansOutstanding = 0;
@@ -79,6 +77,13 @@ router.get("/snapshot", async (req, res) => {
       employeeLoansOutstanding += Math.max(0, p - paid);
     }
     employeeLoansOutstanding = round2(employeeLoansOutstanding);
+
+    // Receivables are org-scoped (customers are not branch-owned).
+    const recAgg = await prisma.customer.aggregate({
+      where: { organizationId: orgId },
+      _sum: { accountBalance: true },
+    });
+    const receivables = round2(Number(recAgg._sum.accountBalance ?? 0));
 
     const sessionWhere = {
       closedAt: null,
@@ -131,7 +136,9 @@ router.get("/snapshot", async (req, res) => {
       stockValueAtCost: round2(stockValueAtCost),
       inventoryLinesWithoutCost: linesWithoutCost,
       receivables,
+      receivablesScope: "organization",
       employeeLoansOutstanding,
+      employeeLoansScope: branchFilter ? "branch" : "organization",
       cashInOpenSessions,
       openCashSessionsCount: sessions.length,
       sessionBreakdown,

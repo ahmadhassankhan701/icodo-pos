@@ -47,6 +47,9 @@ router.post("/", async (req, res) => {
   if (!email?.trim() || !password || !name?.trim()) {
     return res.status(400).json({ error: "البريد والاسم وكلمة المرور مطلوبة" });
   }
+  if (String(password).length < 6) {
+    return res.status(400).json({ error: "كلمة المرور يجب ألا تقل عن 6 أحرف" });
+  }
   if (!["ADMIN", "MANAGER", "CASHIER"].includes(String(role))) {
     return res.status(400).json({ error: "دور غير صالح" });
   }
@@ -75,21 +78,28 @@ router.post("/", async (req, res) => {
     });
   }
 
-  const hash = await bcrypt.hash(String(password), 10);
-  const user = await prisma.user.create({
-    data: {
-      organizationId: req.user.organizationId,
-      email: String(email).toLowerCase().trim(),
-      passwordHash: hash,
-      name: name.trim(),
-      nameEn: nameEn?.trim() || null,
-      role: roleStr,
-      branchId: resolvedBranchId,
-    },
-    select: userSelect,
-  });
-  const ownerId = await findOrganizationOwnerId(prisma, req.user.organizationId);
-  res.status(201).json({ ...user, isOrgOwner: user.id === ownerId });
+  try {
+    const hash = await bcrypt.hash(String(password), 10);
+    const user = await prisma.user.create({
+      data: {
+        organizationId: req.user.organizationId,
+        email: String(email).toLowerCase().trim(),
+        passwordHash: hash,
+        name: name.trim(),
+        nameEn: nameEn?.trim() || null,
+        role: roleStr,
+        branchId: resolvedBranchId,
+      },
+      select: userSelect,
+    });
+    const ownerId = await findOrganizationOwnerId(prisma, req.user.organizationId);
+    res.status(201).json({ ...user, isOrgOwner: user.id === ownerId });
+  } catch (e) {
+    if (e?.code === "P2002") {
+      return res.status(409).json({ error: "البريد مسجّل مسبقاً في هذه المؤسسة", code: "EMAIL_TAKEN" });
+    }
+    throw e;
+  }
 });
 
 router.patch("/:id", async (req, res) => {
@@ -122,7 +132,12 @@ router.patch("/:id", async (req, res) => {
   if (nextRole !== "ADMIN" && !nextBranch) {
     return res.status(400).json({ error: "يجب تعيين فرع للمستخدم" });
   }
-  if (password) data.passwordHash = await bcrypt.hash(String(password), 10);
+  if (password) {
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: "كلمة المرور يجب ألا تقل عن 6 أحرف" });
+    }
+    data.passwordHash = await bcrypt.hash(String(password), 10);
+  }
 
   const user = await prisma.user.update({
     where: { id: target.id },

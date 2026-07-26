@@ -203,7 +203,7 @@ export const marketingCopy = {
         {
           icon: "05",
           title: "Built for your vertical",
-          body: "Enable appointments, delivery, wholesale, or customer accounts for your trade.",
+          body: "Enable appointments, wholesale, or customer accounts for your trade.",
         },
         {
           icon: "06",

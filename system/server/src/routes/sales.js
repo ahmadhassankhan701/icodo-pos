@@ -6,6 +6,7 @@ import { authMiddleware } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 import { unitPriceDecimalForSale } from "../lib/productPricing.js";
+import { saleRequiresOpenCashSession } from "../lib/saleCash.js";
 import {
   dbUnavailableMessage,
   isDbUnavailableError,
@@ -20,6 +21,10 @@ import {
   shouldDeferLoyaltyEarn,
 } from "../lib/loyalty.js";
 import { resolveLineModifiers } from "../lib/productModifiers.js";
+import {
+  consumeLotsFefo,
+  ensureLotsCoverQuantity,
+} from "../lib/inventoryLots.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -38,15 +43,6 @@ function generateInvoiceNumber(branchId) {
   const rand = Math.floor(Math.random() * 9000 + 1000);
   const b = String(branchId || "").slice(-4).toUpperCase();
   return `INV-${b || "MAIN"}-${stamp}-${rand}`;
-}
-
-function sortLotsForFefo(a, b) {
-  const ad = a.expiryDate ? new Date(a.expiryDate).getTime() : Number.POSITIVE_INFINITY;
-  const bd = b.expiryDate ? new Date(b.expiryDate).getTime() : Number.POSITIVE_INFINITY;
-  if (ad !== bd) return ad - bd;
-  const ar = a.receivedAt ? new Date(a.receivedAt).getTime() : 0;
-  const br = b.receivedAt ? new Date(b.receivedAt).getTime() : 0;
-  return ar - br;
 }
 
 /**
@@ -392,16 +388,28 @@ router.post("/checkout", async (req, res) => {
       }
     }
 
-    const openSession =
-      pm !== "ON_DELIVERY" && amountPaidNum > 0.005
-        ? await prisma.cashSession.findFirst({
-            where: {
-              branchId: bid,
-              closedAt: null,
-              branch: { organizationId: orgId },
-            },
-            select: { id: true },
-          })
+    const needsCashDrawer = saleRequiresOpenCashSession(
+      pm,
+      splitInfo.useSplit ? splitInfo.normalized : null,
+      amountPaidNum,
+    );
+    const openSession = await prisma.cashSession.findFirst({
+      where: {
+        branchId: bid,
+        closedAt: null,
+        branch: { organizationId: orgId },
+      },
+      select: { id: true },
+    });
+    if (needsCashDrawer && !openSession) {
+      throw new Error(
+        "لا توجد جلسة صندوق مفتوحة — افتح الصندوق من صفحة الصندوق قبل البيع النقدي",
+      );
+    }
+    // Attach non-delivery paid sales to the open session when present (cash required above).
+    const attachSessionId =
+      pm !== "ON_DELIVERY" && amountPaidNum > 0.005 && openSession
+        ? openSession.id
         : null;
 
     const eligibleBase = afterCouponNum;
@@ -503,7 +511,7 @@ router.post("/checkout", async (req, res) => {
           paidAt: amountDueNum <= 0.01 ? new Date() : null,
           paymentMethod: pm,
           ...(splitInfo.useSplit ? { paymentSplits: splitInfo.normalized } : {}),
-          cashSessionId: openSession?.id ?? null,
+          cashSessionId: attachSessionId,
           couponId: couponRow?.id ?? null,
           couponDiscountAmount: couponDiscDec,
           loyaltyPointsRedeemed: redeemPointsUsed,
@@ -540,38 +548,32 @@ router.post("/checkout", async (req, res) => {
       }
 
       // FEFO lot allocation: consume earliest-expiry lots first for traceability.
+      // If lots drifted behind aggregate stock, auto-cover then consume so refunds can restore.
       for (const saleItem of created.items) {
-        let needed = Number(saleItem.quantity || 0);
+        const needed = Number(saleItem.quantity || 0);
         if (needed <= 0) continue;
-        const lots = await tx.inventoryLot.findMany({
-          where: {
-            organizationId: orgId,
-            branchId: bid,
-            productId: saleItem.productId,
-            quantityOnHand: { gt: 0 },
-          },
-          select: { id: true, quantityOnHand: true, expiryDate: true, receivedAt: true },
+        await ensureLotsCoverQuantity(tx, {
+          orgId,
+          branchId: bid,
+          productId: saleItem.productId,
+          quantity: needed,
+          note: "sale-unlotted-cover",
         });
-        const ordered = [...lots].sort(sortLotsForFefo);
-        const lotLines = [];
-        for (const lot of ordered) {
-          if (needed <= 0) break;
-          const take = Math.min(needed, Number(lot.quantityOnHand || 0));
-          if (take <= 0) continue;
-          await tx.inventoryLot.update({
-            where: { id: lot.id },
-            data: { quantityOnHand: { decrement: take } },
+        const taken = await consumeLotsFefo(tx, {
+          orgId,
+          branchId: bid,
+          productId: saleItem.productId,
+          quantity: needed,
+        });
+        if (taken.length > 0) {
+          await tx.saleItemLot.createMany({
+            data: taken.map((t) => ({
+              organizationId: orgId,
+              saleItemId: saleItem.id,
+              inventoryLotId: t.lotId,
+              quantity: t.quantity,
+            })),
           });
-          lotLines.push({
-            organizationId: orgId,
-            saleItemId: saleItem.id,
-            inventoryLotId: lot.id,
-            quantity: take,
-          });
-          needed -= take;
-        }
-        if (lotLines.length > 0) {
-          await tx.saleItemLot.createMany({ data: lotLines });
         }
       }
 

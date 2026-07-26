@@ -145,11 +145,22 @@ export default function POS() {
       setOpenCashSession(null);
       return;
     }
-    const q = new URLSearchParams();
-    q.set("branchId", branchId);
-    api(`/api/cash-sessions/open?${q.toString()}`)
-      .then((s) => setOpenCashSession(s || null))
-      .catch(() => setOpenCashSession(null));
+    const loadSession = () => {
+      const q = new URLSearchParams();
+      q.set("branchId", branchId);
+      api(`/api/cash-sessions/open?${q.toString()}`)
+        .then((s) => setOpenCashSession(s || null))
+        .catch(() => setOpenCashSession(null));
+    };
+    loadSession();
+    const onFocus = () => loadSession();
+    const onAlerts = () => loadSession();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("alerts-changed", onAlerts);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("alerts-changed", onAlerts);
+    };
   }, [branchId]);
 
   const needsCashSessionWarning = useMemo(() => {
@@ -495,9 +506,22 @@ export default function POS() {
     if (!items.length) return;
     const bid = branchId;
 
-    if (needsCashSessionWarning && typeof navigator !== "undefined" && navigator.onLine) {
-      const ok = window.confirm(t("pos.cashSessionConfirm"));
-      if (!ok) return;
+    const tenderNeedsCashSession = (() => {
+      if (splitEnabled) {
+        return splitRows.some(
+          (r) =>
+            String(r.method || "").toUpperCase() === "CASH" &&
+            round2(Number.parseFloat(String(r.amount).replace(",", ".")) || 0) > 0,
+        );
+      }
+      if (paymentMethod !== "CASH") return false;
+      if (payNowInput.trim() === "") return true;
+      return round2(Number.parseFloat(String(payNowInput).replace(",", ".")) || 0) > 0;
+    })();
+
+    if (tenderNeedsCashSession && !openCashSession) {
+      setMsg(t("pos.cashSessionRequired"));
+      return;
     }
 
     let paymentSplits = undefined;
@@ -804,7 +828,7 @@ export default function POS() {
       {needsCashSessionWarning ? (
         <div
           className="card"
-          role="status"
+          role="alert"
           style={{
             margin: "0 0 8px",
             padding: "10px 14px",
@@ -812,11 +836,11 @@ export default function POS() {
             flexWrap: "wrap",
             gap: 10,
             alignItems: "center",
-            background: "color-mix(in srgb, var(--warning) 18%, var(--surface))",
-            borderColor: "var(--warning)",
+            background: "color-mix(in srgb, var(--danger, #c62828) 12%, var(--surface))",
+            borderColor: "var(--danger, #c62828)",
           }}
         >
-          <span style={{ flex: 1, fontSize: 13 }}>{t("pos.cashSessionBanner")}</span>
+          <span style={{ flex: 1, fontSize: 13 }}>{t("pos.cashSessionRequired")}</span>
           <Link to="/cash" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", textDecoration: "none" }}>
             {t("nav.funds")}
           </Link>

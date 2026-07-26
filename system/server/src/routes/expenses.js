@@ -15,7 +15,7 @@ function parseDate(s) {
 }
 
 /** قائمة مصاريف مع فلترة */
-router.get("/", async (req, res) => {
+router.get("/", requireRole("ADMIN", "MANAGER"), requirePermission("expenses"), async (req, res) => {
   const orgId = req.user.organizationId;
   const from = req.query.from ? parseDate(req.query.from) : null;
   const to = req.query.to ? parseDate(req.query.to) : null;

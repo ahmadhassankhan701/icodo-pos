@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requirePermission } from "../middleware/auth.js";
 import {
   getOrCreateLoyaltySettings,
   summarizeLoyaltyProgram,
@@ -19,12 +19,12 @@ router.get("/status", async (req, res, next) => {
   }
 });
 
-router.get("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.get("/", requirePermission("loyalty"), async (req, res) => {
   const row = await getOrCreateLoyaltySettings(prisma, req.user.organizationId);
   res.json(row);
 });
 
-router.get("/ledger", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.get("/ledger", requirePermission("loyalty"), async (req, res) => {
   const take = Math.min(
     500,
     Math.max(1, parseInt(String(req.query.limit || "100"), 10) || 100)
@@ -41,7 +41,7 @@ router.get("/ledger", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   res.json(rows);
 });
 
-router.put("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.put("/", requirePermission("loyalty"), async (req, res) => {
   const orgId = req.user.organizationId;
   const b = req.body || {};
   await getOrCreateLoyaltySettings(prisma, orgId);

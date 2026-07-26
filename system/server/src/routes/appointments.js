@@ -16,6 +16,28 @@ function parseDateTime(value) {
   return d;
 }
 
+function parseDayBounds(dayRaw) {
+  const raw = String(dayRaw || "").trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const d = Number(m[3]);
+    const from = new Date(y, mo, d, 0, 0, 0, 0);
+    const to = new Date(y, mo, d, 23, 59, 59, 999);
+    if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+      return { from, to };
+    }
+  }
+  const day = raw ? new Date(raw) : new Date();
+  if (Number.isNaN(day.getTime())) return null;
+  const from = new Date(day);
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(day);
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
 async function assertBranchAllowed(req, branchId) {
   const bid = branchId || req.user.branchId || null;
   if (!bid) return null;
@@ -70,12 +92,9 @@ router.post("/services", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const branchId = req.query.branchId ? String(req.query.branchId) : req.user.branchId || null;
-    const day = req.query.day ? new Date(String(req.query.day)) : new Date();
-    if (Number.isNaN(day.getTime())) return res.status(400).json({ error: "تاريخ غير صالح" });
-    const from = new Date(day);
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(day);
-    to.setHours(23, 59, 59, 999);
+    const bounds = parseDayBounds(req.query.day || new Date().toISOString().slice(0, 10));
+    if (!bounds) return res.status(400).json({ error: "تاريخ غير صالح" });
+    const { from, to } = bounds;
 
     if (branchId) await assertBranchAllowed(req, branchId);
 
@@ -140,6 +159,9 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "وقت الموعد غير صالح" });
     }
     const branchId = await assertBranchAllowed(req, b.branchId ? String(b.branchId) : null);
+    if (!branchId) {
+      return res.status(400).json({ error: "يجب اختيار الفرع" });
+    }
     const groomerId = b.groomerId ? String(b.groomerId) : null;
     const serviceId = b.serviceId ? String(b.serviceId) : null;
     const customerId = b.customerId ? String(b.customerId) : null;

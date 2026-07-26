@@ -7,6 +7,8 @@ import { writeAudit } from "../lib/auditLog.js";
 import {
   applyLoanDeductionForLine,
   computeNet,
+  openLoanBalance,
+  roundMoney,
 } from "../lib/payrollHelpers.js";
 
 const router = Router();
@@ -239,6 +241,14 @@ router.patch("/periods/:id/lines/:lineId", async (req, res) => {
   if ([base, allow, ded, loan].some((x) => Number.isNaN(x) || x < 0)) {
     return res.status(400).json({ error: "مبالغ غير صالحة" });
   }
+  if (loan > 0) {
+    const openBal = await openLoanBalance(prisma, oid, line.employeeId);
+    if (loan > openBal + 0.02) {
+      return res.status(400).json({
+        error: `خصم السلف يتجاوز الرصيد المفتوح (${openBal.toFixed(2)})`,
+      });
+    }
+  }
   const net = computeNet(base, allow, ded, loan);
 
   const updated = await prisma.payrollLine.update({
@@ -329,24 +339,59 @@ router.post("/periods/:id/mark-paid", async (req, res) => {
     return res.status(400).json({ error: "اعتماد الفترة مطلوب قبل التسديد" });
   }
 
-  await prisma.$transaction(async (tx) => {
-    const fresh = await tx.payrollPeriod.findFirst({
-      where: { id: period.id },
-      include: { lines: true },
-    });
-    for (const line of fresh.lines) {
-      if (Number(line.loanDeduction) > 0) {
-        await applyLoanDeductionForLine(tx, oid, line);
+  try {
+    for (const line of period.lines) {
+      const want = roundMoney(Number(line.loanDeduction));
+      if (want <= 0) continue;
+      const openBal = await openLoanBalance(prisma, oid, line.employeeId);
+      if (want > openBal + 0.02) {
+        return res.status(400).json({
+          error: `خصم السلف يتجاوز الرصيد المفتوح للموظف (سطر ${line.id.slice(-6)} · متاح ${openBal.toFixed(2)})`,
+        });
       }
     }
-    await tx.payrollPeriod.update({
-      where: { id: period.id },
-      data: {
-        status: "PAID",
-        paidAt: new Date(),
-      },
+
+    const payrollTotal = roundMoney(
+      period.lines.reduce((sum, line) => sum + Number(line.netAmount || 0), 0),
+    );
+
+    await prisma.$transaction(async (tx) => {
+      const fresh = await tx.payrollPeriod.findFirst({
+        where: { id: period.id },
+        include: { lines: true },
+      });
+      for (const line of fresh.lines) {
+        if (Number(line.loanDeduction) > 0) {
+          await applyLoanDeductionForLine(tx, oid, line);
+        }
+      }
+      await tx.payrollPeriod.update({
+        where: { id: period.id },
+        data: {
+          status: "PAID",
+          paidAt: new Date(),
+        },
+      });
+
+      // Post payroll into expenses so reports/accounting rebuild pick it up.
+      if (payrollTotal > 0) {
+        const monthLabel = `${period.year}-${String(period.month).padStart(2, "0")}`;
+        await tx.expense.create({
+          data: {
+            organizationId: oid,
+            category: "PAYROLL",
+            amount: new Prisma.Decimal(payrollTotal.toFixed(2)),
+            description: `Payroll ${monthLabel}`,
+            expenseDate: new Date(period.year, period.month - 1, 28, 12, 0, 0),
+            createdByUserId: req.user.sub,
+          },
+        });
+      }
     });
-  });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "فشل تسديد الرواتب";
+    return res.status(400).json({ error: msg });
+  }
 
   const out = await prisma.payrollPeriod.findFirst({
     where: { id: period.id },

@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requirePermission } from "../middleware/auth.js";
 
 const router = Router();
 router.use(authMiddleware);
-router.use(requireRole("ADMIN", "MANAGER"));
+router.use(requirePermission("reports"));
 
 function branchScope(req, branchId) {
   const orgId = req.user.organizationId;

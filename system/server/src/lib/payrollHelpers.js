@@ -60,7 +60,20 @@ export async function applyLoanDeductionForLine(tx, organizationId, line) {
 
   if (remaining > 0.02) {
     throw new Error(
-      `مجموع السلف المفتوحة لا يغطي خصم الراتب (${remaining.toFixed(2)} متبقي)`
+      `مجموع السلف المفتوحة لا يغطي خصم الراتب (${remaining.toFixed(2)} متبقي)`,
     );
   }
+}
+
+/** Total still owed on OPEN loans for an employee. */
+export async function openLoanBalance(db, organizationId, employeeId) {
+  const loans = await db.employeeLoan.findMany({
+    where: { organizationId, employeeId, status: "OPEN" },
+    select: { principal: true, paidAmount: true },
+  });
+  let owed = 0;
+  for (const loan of loans) {
+    owed += Math.max(0, Number(loan.principal) - Number(loan.paidAmount));
+  }
+  return roundMoney(owed);
 }

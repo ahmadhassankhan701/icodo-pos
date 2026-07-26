@@ -7,6 +7,10 @@ import { writeAudit } from "../lib/auditLog.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 import { resolveStoredImageUrl } from "../lib/productImageUrl.js";
 import { calendarDaysUntilExpiryUTC } from "../lib/productExpiry.js";
+import {
+  moveLotsBetweenBranches,
+  syncLotsToTargetQuantity,
+} from "../lib/inventoryLots.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -15,10 +19,14 @@ router.use(authMiddleware);
 router.get("/lots", requirePermission("productsView"), async (req, res) => {
   try {
     const orgId = req.user.organizationId;
-    const branchId =
+    const branchIdRaw =
       req.query.branchId != null && String(req.query.branchId).trim()
         ? String(req.query.branchId).trim()
-        : req.user.branchId || null;
+        : null;
+    // Admins may omit branchId to browse all branches; others default to their branch.
+    const branchId =
+      branchIdRaw ||
+      (req.user.role === "ADMIN" ? null : req.user.branchId || null);
     if (
       req.user.role !== "ADMIN" &&
       req.user.branchId &&
@@ -28,6 +36,10 @@ router.get("/lots", requirePermission("productsView"), async (req, res) => {
       return res.status(403).json({ error: "غير مصرح لهذا الفرع" });
     }
     const q = req.query.q != null ? String(req.query.q).trim() : "";
+    const productId =
+      req.query.productId != null && String(req.query.productId).trim()
+        ? String(req.query.productId).trim()
+        : "";
     const inStockOnly = String(req.query.inStock ?? "1") !== "0";
     const withinRaw = Number.parseInt(String(req.query.withinDays ?? ""), 10);
     const withinDays = Number.isFinite(withinRaw)
@@ -37,6 +49,7 @@ router.get("/lots", requirePermission("productsView"), async (req, res) => {
     const where = {
       organizationId: orgId,
       ...(branchId ? { branchId } : {}),
+      ...(productId ? { productId } : {}),
       ...(inStockOnly ? { quantityOnHand: { gt: 0 } } : {}),
       ...(q
         ? {
@@ -225,46 +238,61 @@ router.post("/reconcile", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePer
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== bid) {
     return res.status(403).json({ error: "لا يمكن الجرد لفرع آخر" });
   }
-  const br = await findBranchInOrg(prisma, req.user.organizationId, bid);
+  const orgId = req.user.organizationId;
+  const br = await findBranchInOrg(prisma, orgId, bid);
   if (!br) return res.status(400).json({ error: "فرع غير صالح" });
+
+  // Only apply lines that change quantity (full catalog posts are common from the UI).
+  const normalized = [];
   for (const line of lines) {
+    const productId = String(line.productId || "");
+    if (!productId) continue;
+    const q = Math.max(0, Math.floor(Number(line.quantity) || 0));
     const pr = await prisma.product.findFirst({
-      where: { id: line.productId, organizationId: req.user.organizationId },
+      where: { id: productId, organizationId: orgId },
     });
-    if (!pr) return res.status(400).json({ error: `منتج غير صالح: ${line.productId}` });
+    if (!pr) return res.status(400).json({ error: `منتج غير صالح: ${productId}` });
+    normalized.push({ productId, quantity: q });
+  }
+  if (!normalized.length) {
+    return res.status(400).json({ error: "لا توجد بنود" });
   }
 
   try {
-    await prisma.$transaction(
-      lines.map((line) => {
-        const productId = line.productId;
-        const q = Math.max(0, Math.floor(Number(line.quantity) || 0));
-        return prisma.inventory.upsert({
+    await prisma.$transaction(async (tx) => {
+      for (const line of normalized) {
+        await tx.inventory.upsert({
           where: {
-            productId_branchId: { productId, branchId: bid },
+            productId_branchId: { productId: line.productId, branchId: bid },
           },
           create: {
-            productId,
+            productId: line.productId,
             branchId: bid,
-            quantity: q,
+            quantity: line.quantity,
             minStockLevel: 5,
           },
-          update: { quantity: q },
+          update: { quantity: line.quantity },
         });
-      }),
-    );
+        await syncLotsToTargetQuantity(tx, {
+          orgId,
+          branchId: bid,
+          productId: line.productId,
+          targetQty: line.quantity,
+        });
+      }
+    });
     await writeAudit({
       userId: req.user.sub,
       action: "INVENTORY_RECONCILE",
       entityType: "Inventory",
       entityId: bid,
       branchId: bid,
-      summary: `Reconcile ${lines.length} lines`,
+      summary: `Reconcile ${normalized.length} lines`,
     });
-    scheduleInventoryWebhook(req.user.organizationId, {
+    scheduleInventoryWebhook(orgId, {
       event: "inventory.reconcile",
-      meta: { branchId: bid, lineCount: lines.length },
-      lines: lines.map((line) => ({
+      meta: { branchId: bid, lineCount: normalized.length },
+      lines: normalized.map((line) => ({
         branchId: bid,
         productId: line.productId,
         quantityDelta: 0,
@@ -295,29 +323,49 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePerm
   const bTo = await findBranchInOrg(prisma, orgId, to);
   if (!bFrom || !bTo) return res.status(400).json({ error: "فرع غير صالح" });
 
+  // Aggregate duplicate product lines so validation matches the actual move.
+  const byProduct = new Map();
+  for (const line of items) {
+    const productId = String(line.productId || "");
+    if (!productId) continue;
+    const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+    byProduct.set(productId, (byProduct.get(productId) || 0) + qty);
+  }
+  const prep = [...byProduct.entries()].map(([productId, qty]) => ({ productId, qty }));
+  if (!prep.length) {
+    return res.status(400).json({ error: "لا توجد بنود" });
+  }
+
   try {
-    const prep = [];
-    for (const line of items) {
-      const productId = line.productId;
-      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+    for (const { productId, qty } of prep) {
+      const pr = await prisma.product.findFirst({
+        where: { id: productId, organizationId: orgId },
+      });
+      if (!pr) {
+        return res.status(400).json({ error: `منتج غير موجود: ${productId}` });
+      }
       const src = await prisma.inventory.findUnique({
         where: { productId_branchId: { productId, branchId: from } },
       });
       if (!src || src.quantity < qty) {
-        const p = await prisma.product.findFirst({
-          where: { id: productId, organizationId: orgId },
-        });
-        return res.status(400).json({ error: `كمية غير كافية: ${p?.name || productId}` });
+        return res.status(400).json({ error: `كمية غير كافية: ${pr.name}` });
       }
-      prep.push({ productId, qty });
     }
-    await prisma.$transaction(
-      prep.flatMap(({ productId, qty }) => [
-        prisma.inventory.update({
+
+    await prisma.$transaction(async (tx) => {
+      for (const { productId, qty } of prep) {
+        const src = await tx.inventory.findUnique({
+          where: { productId_branchId: { productId, branchId: from } },
+        });
+        if (!src || src.quantity < qty) {
+          const p = await tx.product.findFirst({ where: { id: productId } });
+          throw new Error(`كمية غير كافية: ${p?.name || productId}`);
+        }
+        await tx.inventory.update({
           where: { productId_branchId: { productId, branchId: from } },
           data: { quantity: { decrement: qty } },
-        }),
-        prisma.inventory.upsert({
+        });
+        await tx.inventory.upsert({
           where: { productId_branchId: { productId, branchId: to } },
           create: {
             productId,
@@ -326,16 +374,24 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePerm
             minStockLevel: 5,
           },
           update: { quantity: { increment: qty } },
-        }),
-      ]),
-    );
+        });
+        await moveLotsBetweenBranches(tx, {
+          orgId,
+          fromBranchId: from,
+          toBranchId: to,
+          productId,
+          quantity: qty,
+        });
+      }
+    });
+
     await writeAudit({
       userId: req.user.sub,
       action: "INVENTORY_TRANSFER",
       entityType: "Branch",
       entityId: `${from}->${to}`,
       branchId: from,
-      summary: `Transfer ${items.length} lines to branch ${to}`,
+      summary: `Transfer ${prep.length} products to branch ${to}`,
     });
     scheduleInventoryWebhook(orgId, {
       event: "inventory.transfer",

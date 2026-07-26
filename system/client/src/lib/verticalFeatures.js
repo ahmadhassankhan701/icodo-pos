@@ -27,9 +27,6 @@ const APPOINTMENTS_VERTICALS = new Set([
   "AUTO_DEALER",
 ]);
 
-/** أنشطة لا نعرض فيها مسارات التوصيل الافتراضية */
-const DELIVERY_EXCLUDED = new Set(["BOOKING_SERVICES", "AUTO_DEALER"]);
-
 /** أنشطة نقطة بيع مباشرة — غالباً دون ذمم عملاء */
 const CUSTOMER_ACCOUNTS_EXCLUDED = new Set([
   "CAFE",
@@ -47,7 +44,7 @@ const LOTS_EXPIRY_VERTICALS = new Set(["PHARMACY", "GROCERY"]);
 const CAFE_POS_VERTICALS = new Set(["CAFE", "RESTAURANT"]);
 
 /**
- * @param {'wholesale' | 'appointments' | 'delivery' | 'customerAccounts' | 'petPosFilters' | 'lotsExpiry' | 'cafePosExtras'} feature
+ * @param {'wholesale' | 'appointments' | 'customerAccounts' | 'petPosFilters' | 'lotsExpiry' | 'cafePosExtras'} feature
  * @param {string | null | undefined} businessVertical
  */
 export function isVerticalFeatureEnabled(feature, businessVertical) {
@@ -62,8 +59,6 @@ export function isVerticalFeatureEnabled(feature, businessVertical) {
       return !WHOLESALE_EXCLUDED.has(v);
     case "appointments":
       return APPOINTMENTS_VERTICALS.has(v);
-    case "delivery":
-      return !DELIVERY_EXCLUDED.has(v);
     case "customerAccounts":
       return !CUSTOMER_ACCOUNTS_EXCLUDED.has(v);
     case "lotsExpiry":

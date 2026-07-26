@@ -153,6 +153,7 @@ export default function Users() {
             placeholder={t("login.password")}
             type="password"
             required
+            minLength={6}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             disabled={atLimit || busy}

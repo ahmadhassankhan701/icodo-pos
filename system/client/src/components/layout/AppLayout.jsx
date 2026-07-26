@@ -40,8 +40,7 @@ function navSectionForPath(pathname) {
     p.startsWith("/customers") ||
     p.startsWith("/customer-accounts") ||
     p.startsWith("/loyalty") ||
-    p.startsWith("/appointments") ||
-    p.startsWith("/delivery")
+    p.startsWith("/appointments")
   ) {
     return "customers";
   }
@@ -101,8 +100,12 @@ function SidebarNavSection({ sectionId, title, icon, expanded, onToggle, t, chil
         title={hint}
       >
         <span className="app-sidebar-heading-main">
-          {icon ? <SidebarIcon name={icon} /> : null}
-          <span>{title}</span>
+          {icon ? (
+            <span className="app-sidebar-heading-ico" aria-hidden>
+              <SidebarIcon name={icon} />
+            </span>
+          ) : null}
+          <span className="app-sidebar-heading-label">{title}</span>
         </span>
         <span className="app-sidebar-nav-chevron" aria-hidden>
           <SidebarIcon name="chevron" size={14} />
@@ -110,12 +113,13 @@ function SidebarNavSection({ sectionId, title, icon, expanded, onToggle, t, chil
       </button>
       <div
         id={panelId}
-        className="app-sidebar-nav-panel"
+        className={`app-sidebar-nav-panel${expanded ? " is-expanded" : ""}`}
         role="region"
         aria-labelledby={`${panelId}-btn`}
-        hidden={!expanded}
+        aria-hidden={!expanded}
+        inert={!expanded || undefined}
       >
-        {children}
+        <div className="app-sidebar-nav-panel-inner">{children}</div>
       </div>
     </div>
   );
@@ -341,12 +345,6 @@ export function AppLayout() {
                 <span>{t("nav.appointments")}</span>
               </NavLink>
             ) : null}
-            {(isAdmin || isManager) && isVerticalFeatureEnabled("delivery", bv) ? (
-              <NavLink to="/delivery" className={sidebarLinkClass}>
-                <SidebarIcon name="delivery" />
-                <span>{t("nav.delivery")}</span>
-              </NavLink>
-            ) : null}
           </SidebarNavSection>
 
           <SidebarNavSection
@@ -369,7 +367,7 @@ export function AppLayout() {
                 <span>{t("nav.zakat")}</span>
               </NavLink>
             ) : null}
-            {isAdmin || isManager ? (
+            {(isAdmin || isManager) && isVerticalFeatureEnabled("appointments", bv) ? (
               <NavLink to="/commissions" className={sidebarLinkClass}>
                 <SidebarIcon name="commissions" />
                 <span>{t("nav.commissions")}</span>

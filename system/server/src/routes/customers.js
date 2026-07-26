@@ -25,9 +25,9 @@ router.get("/", async (req, res) => {
     ...(q
       ? {
           OR: [
-            { name: { contains: q } },
-            { phone: { contains: q } },
-            { email: { contains: q } },
+            { name: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -50,6 +50,9 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "رصيد الذمّة غير صالح" });
   }
   const opening = bal != null ? bal : 0;
+  if (opening > 0 && req.user.role === "CASHIER") {
+    return res.status(403).json({ error: "لا يمكن للكاشير تعيين رصيد افتتاحي" });
+  }
 
   const row = await prisma.$transaction(async (tx) => {
     const customer = await tx.customer.create({

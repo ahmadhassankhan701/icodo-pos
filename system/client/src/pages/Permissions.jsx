@@ -25,6 +25,7 @@ export default function Permissions() {
   });
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [loadOk, setLoadOk] = useState(false);
 
   const load = async () => {
     const data = await api("/api/permissions");
@@ -33,13 +34,18 @@ export default function Permissions() {
       CASHIER: { ...DEFAULT_CASHIER_PERMISSIONS, ...(data?.matrices?.CASHIER || {}) },
     });
     setDirty(false);
+    setLoadOk(true);
   };
 
   useEffect(() => {
-    load().catch((e) => showToast(e.message || "Failed to load", "error"));
+    load().catch((e) => {
+      setLoadOk(false);
+      showToast(e.message || "Failed to load", "error");
+    });
   }, []);
 
   const toggle = (key) => {
+    if (!loadOk) return;
     setMatrices((prev) => ({
       ...prev,
       [tab]: { ...prev[tab], [key]: !prev[tab][key] },
@@ -48,12 +54,17 @@ export default function Permissions() {
   };
 
   const resetTab = () => {
+    if (!loadOk) return;
     const defaults = tab === "MANAGER" ? DEFAULT_MANAGER_PERMISSIONS : DEFAULT_CASHIER_PERMISSIONS;
     setMatrices((prev) => ({ ...prev, [tab]: { ...defaults } }));
     setDirty(true);
   };
 
   const save = async () => {
+    if (!loadOk) {
+      showToast(t("permissions.loadRequired") || "Reload permissions before saving", "error");
+      return;
+    }
     setBusy(true);
     try {
       await api("/api/permissions", {
@@ -136,7 +147,7 @@ export default function Permissions() {
         <button
           type="button"
           className="btn-touch"
-          disabled={busy || !dirty}
+          disabled={busy || !dirty || !loadOk}
           onClick={save}
           style={{ background: "var(--accent)", color: "#fff" }}
         >
@@ -145,7 +156,7 @@ export default function Permissions() {
         <button
           type="button"
           className="btn-touch"
-          disabled={busy}
+          disabled={busy || !loadOk}
           onClick={resetTab}
           style={{ background: "var(--surface2)", color: "var(--text)" }}
         >

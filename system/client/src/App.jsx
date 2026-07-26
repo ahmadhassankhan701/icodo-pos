@@ -40,7 +40,6 @@ const loadAppointments = () => import("./pages/Appointments.jsx");
 const loadAccounting = () => import("./pages/Accounting.jsx");
 const loadAutomations = () => import("./pages/Automations.jsx");
 const loadCommissions = () => import("./pages/Commissions.jsx");
-const loadDeliveryRouting = () => import("./pages/DeliveryRouting.jsx");
 const loadHrLayout = () => import("./pages/hr/HrLayout.jsx");
 const loadHrEmployees = () => import("./pages/hr/HrEmployees.jsx");
 const loadHrPayrollList = () => import("./pages/hr/HrPayrollList.jsx");
@@ -55,7 +54,6 @@ const Appointments = React.lazy(loadAppointments);
 const Accounting = React.lazy(loadAccounting);
 const Automations = React.lazy(loadAutomations);
 const Commissions = React.lazy(loadCommissions);
-const DeliveryRouting = React.lazy(loadDeliveryRouting);
 const HrLayout = React.lazy(loadHrLayout);
 const HrEmployees = React.lazy(loadHrEmployees);
 const HrPayrollList = React.lazy(loadHrPayrollList);
@@ -131,7 +129,6 @@ export default function App() {
     const preload = () => {
       // Warm up heavy chunks in idle time for faster first navigation.
       Promise.allSettled([
-        loadDeliveryRouting(),
         loadReports(),
         loadAppointments(),
       ]);
@@ -254,16 +251,8 @@ export default function App() {
             path="/commissions"
             element={
               <Protected roles={["ADMIN", "MANAGER"]}>
-                <Commissions />
-              </Protected>
-            }
-          />
-          <Route
-            path="/delivery"
-            element={
-              <Protected roles={["ADMIN", "MANAGER"]}>
-                <VerticalFeatureGate feature="delivery">
-                  <DeliveryRouting />
+                <VerticalFeatureGate feature="appointments">
+                  <Commissions />
                 </VerticalFeatureGate>
               </Protected>
             }

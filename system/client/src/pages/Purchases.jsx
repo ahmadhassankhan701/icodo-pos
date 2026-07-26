@@ -107,14 +107,21 @@ export default function Purchases() {
       setMsg(t("purchases.needBranch"));
       return;
     }
-    const items = lines
-      .filter((l) => l.productId && l.unitCost !== "")
-      .map((l) => ({
+    const items = [];
+    for (const l of lines) {
+      if (!l.productId) continue;
+      const unitCost = Number.parseFloat(String(l.unitCost).replace(",", "."));
+      if (!Number.isFinite(unitCost) || unitCost < 0) {
+        setMsg(t("purchases.invalidCost"));
+        return;
+      }
+      items.push({
         productId: l.productId,
         quantity: Math.max(1, parseInt(String(l.quantity), 10) || 1),
-        unitCost: Number.parseFloat(String(l.unitCost).replace(",", ".")) || 0,
+        unitCost,
         expiryDate: l.expiryDate?.trim() ? l.expiryDate : undefined,
-      }));
+      });
+    }
     if (!items.length) {
       setMsg(t("purchases.needLines"));
       return;

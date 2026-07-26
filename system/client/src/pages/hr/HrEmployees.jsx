@@ -105,16 +105,16 @@ export default function HrEmployees() {
     try {
       const body = {
         name: form.name.trim(),
-        nameEn: form.nameEn.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        jobTitle: form.jobTitle.trim() || undefined,
-        branchId: form.branchId || undefined,
-        userId: form.userId || undefined,
+        nameEn: form.nameEn.trim() || null,
+        phone: form.phone.trim() || null,
+        jobTitle: form.jobTitle.trim() || null,
+        branchId: form.branchId ? form.branchId : null,
+        userId: form.userId ? form.userId : null,
         defaultBaseSalary: form.defaultBaseSalary
           ? Number(String(form.defaultBaseSalary).replace(",", "."))
-          : undefined,
+          : null,
         status: form.status,
-        notes: form.notes.trim() || undefined,
+        notes: form.notes.trim() || null,
       };
       if (editing === "new") {
         await api("/api/employees", { method: "POST", body });
@@ -245,6 +245,13 @@ export default function HrEmployees() {
           </tr>
         </thead>
         <tbody>
+          {list.length === 0 ? (
+            <tr>
+              <td colSpan={5} style={{ padding: 16, color: "var(--muted)" }}>
+                {t("hr.emptyEmployees")}
+              </td>
+            </tr>
+          ) : null}
           {list.map((r) => (
             <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
               <td style={{ padding: "8px 4px" }}>{r.name}</td>

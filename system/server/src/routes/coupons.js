@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requirePermission } from "../middleware/auth.js";
 import { normalizeCouponCode } from "../lib/loyalty.js";
 
 const router = Router();
 router.use(authMiddleware);
 
-router.get("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.get("/", requirePermission("loyalty"), async (req, res) => {
   const list = await prisma.coupon.findMany({
     where: { organizationId: req.user.organizationId },
     orderBy: { createdAt: "desc" },
@@ -15,7 +15,7 @@ router.get("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   res.json(list);
 });
 
-router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.post("/", requirePermission("loyalty"), async (req, res) => {
   const orgId = req.user.organizationId;
   const b = req.body || {};
   const code = normalizeCouponCode(b.code);
@@ -71,7 +71,7 @@ router.post("/", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
 });
 
-router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.patch("/:id", requirePermission("loyalty"), async (req, res) => {
   const orgId = req.user.organizationId;
   const existing = await prisma.coupon.findFirst({
     where: { id: req.params.id, organizationId: orgId },
@@ -144,7 +144,7 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   }
 });
 
-router.delete("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
+router.delete("/:id", requirePermission("loyalty"), async (req, res) => {
   const orgId = req.user.organizationId;
   const existing = await prisma.coupon.findFirst({
     where: { id: req.params.id, organizationId: orgId },

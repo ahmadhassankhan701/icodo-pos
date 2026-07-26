@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Prisma } from "../lib/prisma-client-bundle.js";
 import { prisma } from "../lib/prisma.js";
-import { cashPortionFromSale } from "../lib/saleCash.js";
+import { computeSessionExpectedCash } from "../lib/saleCash.js";
 import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 
@@ -90,23 +90,16 @@ router.post("/:id/close", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePer
     return res.status(403).json({ error: "غير مصرح" });
   }
 
-  const sessionSales = await prisma.sale.findMany({
-    where: { cashSessionId: session.id },
-    select: { total: true, paymentMethod: true, paymentSplits: true },
-  });
-  let cashSalesNum = 0;
-  for (const s of sessionSales) {
-    cashSalesNum += cashPortionFromSale(s);
-  }
-  const cashSales = new Prisma.Decimal(cashSalesNum.toFixed(2));
-  const expected = new Prisma.Decimal(session.openingFloat.toString()).add(cashSales);
+  const closedAt = new Date();
+  const expectedNum = await computeSessionExpectedCash(prisma, session, closedAt);
+  const expected = new Prisma.Decimal(expectedNum.toFixed(2));
   const closingDec = new Prisma.Decimal(counted.toFixed(2));
   const variance = closingDec.sub(expected);
 
   const updated = await prisma.cashSession.update({
     where: { id: session.id },
     data: {
-      closedAt: new Date(),
+      closedAt,
       closedByUserId: req.user.sub,
       closingCountedCash: closingDec,
       expectedCash: expected,

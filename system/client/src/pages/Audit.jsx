@@ -7,16 +7,28 @@ export default function Audit() {
   const { t } = useI18n();
   const branchId = useActiveBranchId();
   const [rows, setRows] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
-    const p = new URLSearchParams();
-    p.set("limit", "150");
-    if (branchId) p.set("branchId", branchId);
-    return api(`/api/audit-logs?${p.toString()}`).then(setRows);
-  }, [branchId]);
+  const load = useCallback(async () => {
+    setMsg("");
+    setLoading(true);
+    try {
+      const p = new URLSearchParams();
+      p.set("limit", "150");
+      if (branchId) p.set("branchId", branchId);
+      const data = await api(`/api/audit-logs?${p.toString()}`);
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setRows([]);
+      setMsg(e.message || t("audit.loadError"));
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId, t]);
 
   useEffect(() => {
-    load().catch(() => setRows([]));
+    load();
   }, [load]);
 
   return (
@@ -30,6 +42,8 @@ export default function Audit() {
         </button>
       </div>
 
+      {msg ? <p style={{ color: "var(--danger)", margin: 0 }}>{msg}</p> : null}
+
       <div className="card" style={{ overflowX: "auto" }}>
         <table className="audit-table">
           <thead>
@@ -41,10 +55,16 @@ export default function Audit() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {loading ? (
               <tr>
                 <td colSpan={4} className="audit-table__empty">
-                  {t("audit.empty") || "—"}
+                  {t("common.loading")}
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="audit-table__empty">
+                  {msg ? "—" : t("audit.empty") || "—"}
                 </td>
               </tr>
             ) : (

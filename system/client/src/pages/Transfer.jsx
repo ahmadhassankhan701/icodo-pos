@@ -14,13 +14,14 @@ const inp = {
 
 export default function Transfer() {
   const { t, locale } = useI18n();
-  const { user, isAdmin } = useAuth();
+  const { can } = useAuth();
   const [branches, setBranches] = useState([]);
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [products, setProducts] = useState([]);
   const [lines, setLines] = useState([{ productId: "", quantity: "1" }]);
   const [msg, setMsg] = useState("");
+  const canSubmit = can("transfer");
 
   useEffect(() => {
     api("/api/branches")
@@ -149,11 +150,13 @@ export default function Transfer() {
         >
           {t("returns.addLine")}
         </button>
-        {isAdmin || user?.role === "MANAGER" ? (
+        {canSubmit ? (
           <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 280 }}>
             {t("transfer.submit")}
           </button>
-        ) : null}
+        ) : (
+          <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>{t("transfer.noPermission")}</p>
+        )}
         {msg ? <div style={{ color: "var(--muted)" }}>{msg}</div> : null}
       </form>
     </div>

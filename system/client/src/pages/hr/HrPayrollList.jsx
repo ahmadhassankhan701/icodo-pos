@@ -72,6 +72,13 @@ export default function HrPayrollList() {
           </tr>
         </thead>
         <tbody>
+          {list.length === 0 ? (
+            <tr>
+              <td colSpan={4} style={{ padding: 16, color: "var(--muted)" }}>
+                {t("hr.emptyPayroll")}
+              </td>
+            </tr>
+          ) : null}
           {list.map((r) => (
             <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
               <td style={{ padding: "8px 4px" }}>
