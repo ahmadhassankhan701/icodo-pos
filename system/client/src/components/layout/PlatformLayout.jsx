@@ -44,7 +44,7 @@ export function PlatformLayout() {
         <header className="app-topbar">
           <div style={{ fontSize: 13, color: "var(--muted)", flex: "1 1 auto" }}>
             {t("nav.platform")}
-            <span style={{ marginInlineStart: 8, opacity: 0.7 }}· English</span>
+            <span style={{ marginInlineStart: 8, opacity: 0.7 }}>English</span>
           </div>
           <button
             type="button"
