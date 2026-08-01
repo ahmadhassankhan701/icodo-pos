@@ -1,6 +1,8 @@
 import { isPlatformAdminEmail } from "./platformAdmin.js";
 import { getLoyaltyFlagsForOrganization } from "./loyalty.js";
+import { onboardingStatusFromOrg } from "./onboarding.js";
 import { orgPermissionMatrices, resolveRolePermissions } from "./permissions.js";
+import { getOrCreateTaxSettings, summarizeTaxSettings } from "./taxPacks.js";
 
 /**
  * Build the session user object returned by login / register / me.
@@ -13,6 +15,15 @@ export async function buildSessionUser(prisma, user, organization, branch) {
   const userCount = await prisma.user.count({ where: { organizationId: org.id } });
   const rolePermissions = resolveRolePermissions(org, user.role);
   const matrices = orgPermissionMatrices(org);
+  const onboarding = onboardingStatusFromOrg(org);
+  const isPlatformAdmin = user.role === "ADMIN" && isPlatformAdminEmail(user.email);
+  let tax = null;
+  try {
+    const taxRow = await getOrCreateTaxSettings(prisma, org.id);
+    tax = summarizeTaxSettings(taxRow, org);
+  } catch {
+    tax = null;
+  }
 
   return {
     id: user.id,
@@ -36,7 +47,10 @@ export async function buildSessionUser(prisma, user, organization, branch) {
     /** Super admin only — full matrices for Permissions editor */
     rolePermissionMatrices: user.role === "ADMIN" ? matrices : undefined,
     ...loyaltyFlags,
-    isPlatformAdmin: user.role === "ADMIN" && isPlatformAdminEmail(user.email),
+    isPlatformAdmin,
     isSuperAdmin: user.role === "ADMIN",
+    onboarding,
+    onboardingComplete: isPlatformAdmin || onboarding.complete,
+    tax,
   };
 }

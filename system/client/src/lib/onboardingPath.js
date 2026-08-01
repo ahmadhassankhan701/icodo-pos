@@ -1,0 +1,37 @@
+/**
+ * Where to send a logged-in user based on organization onboarding progress.
+ * Platform admins bypass onboarding.
+ */
+export function getPostAuthPath(user) {
+  if (!user) return "/login";
+  if (user.isPlatformAdmin) return "/platform/organizations";
+
+  if (isOnboardingComplete(user)) return "/dashboard";
+
+  // Offline / legacy session without onboarding payload — don't trap the user
+  if (user.onboardingComplete == null && user.onboarding == null) {
+    return "/dashboard";
+  }
+
+  if (user.role !== "ADMIN") return "/onboarding/pending";
+
+  const onboarding = user.onboarding || {};
+  if (!onboarding.profileDocsDone) return "/onboarding/profile";
+  if (!onboarding.paymentDone) return "/onboarding/payment";
+  return "/dashboard";
+}
+
+export function isOnboardingComplete(user) {
+  if (!user) return false;
+  if (user.isPlatformAdmin) return true;
+  if (user.onboardingComplete === true) return true;
+  if (user.onboardingComplete === false) return false;
+  // Missing payload (offline JWT fallback / old cache): allow app access
+  if (!user.onboarding) return true;
+  return Boolean(user.onboarding.profileDocsDone && user.onboarding.paymentDone);
+}
+
+/** True when the path is part of the onboarding wizard (allowed while incomplete). */
+export function isOnboardingRoute(pathname) {
+  return String(pathname || "").startsWith("/onboarding");
+}

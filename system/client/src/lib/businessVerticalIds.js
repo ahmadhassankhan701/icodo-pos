@@ -19,20 +19,14 @@ export const BUSINESS_VERTICAL_IDS = [
 ];
 
 /**
- * Verticals ready enough for MVP onboarding (core POS + inventory + customers).
- * Others stay in the enum for existing orgs / later, but are disabled in signup UI.
+ * Verticals ready for public signup right now.
+ * Others stay in the enum for existing orgs / later unlocks, but are disabled in signup UI.
+ * Current sellable set: grocery (lots/FEFO), pharmacy (lots + appointments), café (modifiers/table).
  */
 export const MVP_ENABLED_VERTICAL_IDS = [
   "GROCERY",
-  "RETAIL_GENERAL",
-  "PHONE_STORE",
-  "CLOTHING",
-  "HARDWARE_ELECTRONICS",
   "PHARMACY",
-  "PET_STORE",
-  "WHOLESALE",
   "CAFE",
-  "RESTAURANT",
 ];
 
 export const MVP_COMING_SOON_VERTICAL_IDS = BUSINESS_VERTICAL_IDS.filter(

@@ -10,6 +10,13 @@ import { MarketingLayout } from "./marketing/MarketingLayout.jsx";
 import Home from "./pages/marketing/Home.jsx";
 import About from "./pages/marketing/About.jsx";
 import Contact from "./pages/marketing/Contact.jsx";
+import Pricing from "./pages/marketing/Pricing.jsx";
+import Privacy from "./pages/marketing/Privacy.jsx";
+import OnboardingProfile from "./pages/onboarding/OnboardingProfile.jsx";
+import OnboardingPayment from "./pages/onboarding/OnboardingPayment.jsx";
+import OnboardingPaymentSuccess from "./pages/onboarding/OnboardingPaymentSuccess.jsx";
+import OnboardingPending from "./pages/onboarding/OnboardingPending.jsx";
+import { getPostAuthPath, isOnboardingComplete } from "./lib/onboardingPath.js";
 import POS from "./pages/POS.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
@@ -74,6 +81,9 @@ function Protected({ children, roles, permission, anyPermission }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (!isOnboardingComplete(user)) {
+    return <Navigate to={getPostAuthPath(user)} replace />;
+  }
   if (user.role !== "ADMIN") {
     if (roles && !roles.includes(user.role)) {
       return <Navigate to="/dashboard" replace />;
@@ -99,9 +109,7 @@ function PublicHome() {
     );
   }
   if (user) {
-    return (
-      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/dashboard"} replace />
-    );
+    return <Navigate to={getPostAuthPath(user)} replace />;
   }
   return <Home />;
 }
@@ -117,7 +125,22 @@ function ProtectedPlatform({ children }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.isPlatformAdmin) return <Navigate to="/dashboard" replace />;
+  if (!user.isPlatformAdmin) return <Navigate to={getPostAuthPath(user)} replace />;
+  return children;
+}
+
+/** Logged-in users on incomplete onboarding; blocks dashboard until done. */
+function RequireAuth({ children }) {
+  const { user, loading } = useAuth();
+  const { t } = useI18n();
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        {t("common.loading")}
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -157,10 +180,44 @@ export default function App() {
         <Route element={<MarketingLayout />}>
           <Route path="/" element={<PublicHome />} />
           <Route path="/about" element={<About />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/contact" element={<Contact />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route
+          path="/onboarding/profile"
+          element={
+            <RequireAuth>
+              <OnboardingProfile />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/onboarding/payment"
+          element={
+            <RequireAuth>
+              <OnboardingPayment />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/onboarding/payment/success"
+          element={
+            <RequireAuth>
+              <OnboardingPaymentSuccess />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/onboarding/pending"
+          element={
+            <RequireAuth>
+              <OnboardingPending />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/platform"
           element={

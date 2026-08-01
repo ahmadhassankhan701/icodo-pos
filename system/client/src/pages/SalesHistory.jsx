@@ -43,7 +43,7 @@ function payLabel(t, method) {
 
 export default function SalesHistory() {
   const { t, locale } = useI18n();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { classFor } = usePrintSettings();
   const branchId = useActiveBranchId();
   const navigate = useNavigate();
@@ -119,7 +119,7 @@ export default function SalesHistory() {
     setBusyId(`copy:${saleId}`);
     try {
       const sale = await api(`/api/sales/${encodeURIComponent(saleId)}`);
-      const text = buildReceiptPlainText(sale, sale.branch?.name, locale);
+      const text = buildReceiptPlainText(sale, sale.branch?.name, locale, user?.tax);
       await navigator.clipboard.writeText(text);
       setMsg(t("pos.receiptCopied"));
     } catch (e) {
@@ -324,7 +324,9 @@ export default function SalesHistory() {
       </div>
 
       <div className={`print-invoice ${printClass}`} aria-hidden={!printSale}>
-        {printSale ? <InvoicePrint sale={printSale} branchName={printSale.branch?.name} /> : null}
+        {printSale ? (
+          <InvoicePrint sale={printSale} branchName={printSale.branch?.name} taxInfo={user?.tax} />
+        ) : null}
       </div>
     </div>
   );

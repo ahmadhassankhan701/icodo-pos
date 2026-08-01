@@ -68,7 +68,11 @@ export default function POS() {
   const [customerId, setCustomerId] = useState("");
   const [quickCustomerName, setQuickCustomerName] = useState("");
   const [discountInput, setDiscountInput] = useState("");
-  const [taxPercent, setTaxPercent] = useState("0");
+  const [taxPercent, setTaxPercent] = useState(() =>
+    user?.tax?.defaultTaxPercent != null ? String(user.tax.defaultTaxPercent) : "0"
+  );
+  const [taxOptions, setTaxOptions] = useState([0, 5, 15]);
+  const [taxMeta, setTaxMeta] = useState(null);
   const [holdLabel, setHoldLabel] = useState("");
   const [heldList, setHeldList] = useState([]);
   const [copyDone, setCopyDone] = useState(false);
@@ -135,6 +139,28 @@ export default function POS() {
       })
       .catch(() => setCustomers([]));
   }, []);
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (user?.tax?.defaultTaxPercent != null) {
+        setTaxPercent(String(user.tax.defaultTaxPercent));
+        setTaxMeta(user.tax);
+        if (Array.isArray(user.tax.allowedRates)) setTaxOptions(user.tax.allowedRates);
+      }
+      return;
+    }
+    api("/api/tax-settings/status")
+      .then((s) => {
+        setTaxMeta(s);
+        if (Array.isArray(s?.allowedRates) && s.allowedRates.length) {
+          setTaxOptions(s.allowedRates);
+        }
+        if (s?.defaultTaxPercent != null) {
+          setTaxPercent(String(s.defaultTaxPercent));
+        }
+      })
+      .catch(() => {});
+  }, [user?.tax?.defaultTaxPercent]);
 
   useEffect(() => {
     if (branchId) setBranchCart(branchId);
@@ -491,7 +517,7 @@ export default function POS() {
 
   const copyLastReceipt = async () => {
     if (!lastSale) return;
-    const text = buildReceiptPlainText(lastSale, branchName, locale);
+    const text = buildReceiptPlainText(lastSale, branchName, locale, taxMeta || user?.tax);
     try {
       await navigator.clipboard.writeText(text);
       setCopyDone(true);
@@ -1261,7 +1287,8 @@ export default function POS() {
             ) : null}
             <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
               <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                {t("pos.taxPercent")} — {t("pos.taxHint")}
+                {t("pos.taxPercent")}
+                {taxMeta?.countryCode ? ` (${taxMeta.countryCode})` : ""} — {t("pos.taxHint")}
               </span>
               <select
                 value={taxPercent}
@@ -1275,9 +1302,11 @@ export default function POS() {
                   border: "1px solid var(--border)",
                 }}
               >
-                <option value="0">0%</option>
-                <option value="5">5%</option>
-                <option value="15">15%</option>
+                {taxOptions.map((r) => (
+                  <option key={r} value={String(r)}>
+                    {r}%
+                  </option>
+                ))}
               </select>
             </label>
             {taxPreview > 0 ? (
@@ -1331,7 +1360,7 @@ export default function POS() {
         className={`print-invoice ${classFor("retail")}`}
         style={{ position: "fixed", left: -99999, top: 0, width: 400 }}
       >
-        <InvoicePrint sale={lastSale} branchName={branchName} />
+        <InvoicePrint sale={lastSale} branchName={branchName} taxInfo={taxMeta || user?.tax} />
       </div>
 
       {modifierProduct ? (

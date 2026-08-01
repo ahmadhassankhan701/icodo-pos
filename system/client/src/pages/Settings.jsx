@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 import PrintSettings from "./PrintSettings.jsx";
+import TaxSettingsPanel from "../components/TaxSettingsPanel.jsx";
 
 const NOTIF_PREF_KEY = "pos-notifications-enabled";
 
@@ -136,6 +137,8 @@ export default function Settings() {
           }
         />
       </section>
+
+      <TaxSettingsPanel />
 
       <section className="settings-print" aria-label={t("nav.printSettings")}>
         <PrintSettings />

@@ -6,7 +6,9 @@ export const marketingCopy = {
     nav: {
       home: "الرئيسية",
       about: "من نحن",
+      pricing: "الأسعار",
       contact: "تواصل",
+      privacy: "سياسة الخصوصية",
       signIn: "تسجيل الدخول",
       signUp: "إنشاء حساب",
       openMenu: "القائمة",
@@ -138,6 +140,120 @@ export const marketingCopy = {
       formSuccess: "شكراً — افتح بريدك لإكمال الإرسال، أو راسلنا مباشرة على hello@icodo.io",
       privacy: "بإرسالك توافق على تواصل ICODO بخصوص طلبك.",
     },
+    pricing: {
+      kicker: "الأسعار",
+      title: "أسعار بسيطة تناسب نموك",
+      lead: "ابدأ بثلاثة أشهر مجاناً، ثم اختر المدة التي تناسبك. الأسعار بالريال السعودي.",
+      trialBadge: "٣ أشهر مجاناً",
+      trialTitle: "جرّب المنصة كاملة بدون التزام",
+      trialBody:
+        "عند التسجيل تحصل على أول ثلاثة أشهر مجاناً — نقطة البيع، المخزون، الفروع، والتقارير مشمولة. يمكنك الترقية أو الإلغاء قبل انتهاء الفترة التجريبية.",
+      currency: "ر.س",
+      periodLabel: "للفترة",
+      featured: "الأوفر قيمة",
+      plans: [
+        {
+          id: "month",
+          name: "شهري",
+          price: "150",
+          period: "شهر واحد",
+          note: "مرونة كاملة — ادفع شهرياً",
+          features: ["نقطة بيع ومخزون", "فروع وتقارير", "دعم عبر البريد"],
+        },
+        {
+          id: "six",
+          name: "٦ أشهر",
+          price: "600",
+          period: "ستة أشهر",
+          note: "وفّر مقارنة بالدفع الشهري",
+          features: ["كل ميزات الخطة الشهرية", "أولوية في الدعم", "مناسب للمواسم"],
+        },
+        {
+          id: "year",
+          name: "سنوي",
+          price: "1000",
+          period: "سنة كاملة",
+          note: "أفضل سعر — أقل تكلفة للشهر",
+          features: ["كل الميزات", "أولوية قصوى للدعم", "تحديثات المنصة مشمولة"],
+          highlight: true,
+        },
+      ],
+      includesTitle: "ما يشمله الاشتراك",
+      includes: [
+        "نقطة بيع سريعة مع وضع دون اتصال",
+        "مخزون، مشتريات، وتحويلات بين الفروع",
+        "محاسبة وتقارير أساسية",
+        "أدوار وصلاحيات لفريقك",
+        "تحديثات المنصة خلال مدة الاشتراك",
+      ],
+      ctaTitle: "ابدأ تجربتك المجانية",
+      ctaBody: "أنشئ حساب منشأتك الآن — أو تواصل معنا إذا احتجت عرضاً للمؤسسات.",
+      ctaRegister: "إنشاء حساب",
+      ctaContact: "تواصل معنا",
+    },
+    privacy: {
+      kicker: "القانوني",
+      title: "سياسة الخصوصية",
+      lead: "نوضح هنا كيف تجمع ICODO وتستخدم وتحمي بياناتك عند استخدام منصة ICODO POS والمواقع ذات الصلة.",
+      updated: "آخر تحديث: أغسطس 2026",
+      sections: [
+        {
+          title: "من نحن",
+          body: [
+            "تدير ICODO منصة ICODO POS (نقاط البيع، المخزون، والتقارير المرتبطة بها). للاستفسارات المتعلقة بالخصوصية راسلنا على hello@icodo.io.",
+          ],
+        },
+        {
+          title: "البيانات التي نجمعها",
+          body: [
+            "بيانات الحساب والمنشأة: الاسم، البريد، بيانات تسجيل الدخول، واسم المنشأة ونوع النشاط عند التسجيل.",
+            "بيانات التشغيل التي تدخلها أنت: منتجات، مبيعات، عملاء، مخزون، وتقارير — تبقى مرتبطة بمنشأتك.",
+            "بيانات تقنية: عنوان IP تقريبي، نوع المتصفح، وسجلات استخدام ضرورية للأمان وتشخيص الأعطال.",
+            "قد تُخزَّن بعض بيانات نقطة البيع محلياً على جهازك للعمل دون اتصال، ثم تُزامن عند توفر الشبكة.",
+          ],
+        },
+        {
+          title: "كيف نستخدم البيانات",
+          body: [
+            "لتشغيل المنصة، المصادقة، والدعم الفني.",
+            "لتحسين الاستقرار والأداء ومنع إساءة الاستخدام.",
+            "للتواصل بخصوص حسابك، الاشتراك، أو الرد على طلبات التواصل.",
+            "لا نبيع بياناتك الشخصية لأطراف ثالثة لأغراض تسويقية.",
+          ],
+        },
+        {
+          title: "المشاركة والتخزين",
+          body: [
+            "قد نعتمد على مزوّدي بنية تحتية موثوقين (مثل الاستضافة وقواعد البيانات) لمعالجة البيانات نيابةً عنا وفق عقود مناسبة.",
+            "تُخزَّن البيانات وفق ممارسات أمنية معقولة. لا توجد طريقة نقل عبر الإنترنت آمنة بنسبة 100%، ونسعى لحماية حسابك وبيانات منشأتك.",
+          ],
+        },
+        {
+          title: "ملفات تعريف الارتباط والتقنيات المشابهة",
+          body: [
+            "نستخدم تخزيناً محلياً ضرورياً للجلسة، اللغة، ووضع عدم الاتصال في نقطة البيع. لا نعتمد على شبكات إعلانات طرف ثالث لتتبعك عبر المواقع.",
+          ],
+        },
+        {
+          title: "الاحتفاظ والحقوق",
+          body: [
+            "نحتفظ ببيانات الحساب طالما كان حسابك نشطاً، أو حسب ما يلزم للالتزامات القانونية والدعم.",
+            "يمكنك طلب تصحيح بياناتك أو حذف الحساب عبر التواصل معنا. قد نحتاج التحقق من هويتك قبل تنفيذ الطلب.",
+          ],
+        },
+        {
+          title: "تحديثات هذه السياسة",
+          body: [
+            "قد نحدّث هذه الصفحة عند تغيّر ممارساتنا. استمرارك في استخدام المنصة بعد التحديث يعني اطّلاعك على النسخة المنشورة هنا.",
+          ],
+        },
+        {
+          title: "تواصل",
+          body: ["لأسئلة الخصوصية: hello@icodo.io أو عبر صفحة التواصل."],
+        },
+      ],
+      ctaContact: "تواصل معنا",
+    },
     auth: {
       signInTitle: "تسجيل الدخول",
       signInSub: "ادخل إلى نقطة البيع ولوحة منشأتك.",
@@ -158,7 +274,9 @@ export const marketingCopy = {
     nav: {
       home: "Home",
       about: "About",
+      pricing: "Pricing",
       contact: "Contact",
+      privacy: "Privacy Policy",
       signIn: "Sign in",
       signUp: "Sign up",
       openMenu: "Menu",
@@ -289,6 +407,120 @@ export const marketingCopy = {
       formSubmit: "Send inquiry",
       formSuccess: "Thanks — complete sending in your mail app, or email hello@icodo.io directly.",
       privacy: "By submitting, you agree that ICODO may contact you about your request.",
+    },
+    pricing: {
+      kicker: "Pricing",
+      title: "Simple pricing that scales with you",
+      lead: "Start with three months free, then pick the term that fits. Prices are in Saudi Riyal.",
+      trialBadge: "3 months free",
+      trialTitle: "Try the full platform with no commitment",
+      trialBody:
+        "New accounts get the first three months free — POS, inventory, branches, and reports included. Upgrade or cancel before the trial ends.",
+      currency: "SAR",
+      periodLabel: "per term",
+      featured: "Best value",
+      plans: [
+        {
+          id: "month",
+          name: "Monthly",
+          price: "150",
+          period: "1 month",
+          note: "Full flexibility — pay month to month",
+          features: ["POS & inventory", "Branches & reports", "Email support"],
+        },
+        {
+          id: "six",
+          name: "6 months",
+          price: "600",
+          period: "6 months",
+          note: "Save vs paying monthly",
+          features: ["Everything in monthly", "Priority support", "Great for seasonal peaks"],
+        },
+        {
+          id: "year",
+          name: "Yearly",
+          price: "1000",
+          period: "12 months",
+          note: "Best rate — lowest cost per month",
+          features: ["All features", "Highest support priority", "Platform updates included"],
+          highlight: true,
+        },
+      ],
+      includesTitle: "What's included",
+      includes: [
+        "Fast checkout with offline mode",
+        "Inventory, purchases, and branch transfers",
+        "Accounting and core reports",
+        "Roles and permissions for your team",
+        "Platform updates during your subscription",
+      ],
+      ctaTitle: "Start your free trial",
+      ctaBody: "Create your organization now — or contact us for an enterprise quote.",
+      ctaRegister: "Create account",
+      ctaContact: "Contact us",
+    },
+    privacy: {
+      kicker: "Legal",
+      title: "Privacy Policy",
+      lead: "This page explains how ICODO collects, uses, and protects your information when you use ICODO POS and related sites.",
+      updated: "Last updated: August 2026",
+      sections: [
+        {
+          title: "Who we are",
+          body: [
+            "ICODO operates the ICODO POS platform (point of sale, inventory, and related reporting). For privacy questions, email hello@icodo.io.",
+          ],
+        },
+        {
+          title: "Information we collect",
+          body: [
+            "Account and organization data: name, email, login credentials, organization name, and business type at signup.",
+            "Operational data you enter: products, sales, customers, inventory, and reports — tied to your organization.",
+            "Technical data: approximate IP, browser type, and usage logs needed for security and troubleshooting.",
+            "Some POS data may be stored locally on your device for offline use, then synced when connectivity returns.",
+          ],
+        },
+        {
+          title: "How we use information",
+          body: [
+            "To run the product, authenticate users, and provide support.",
+            "To improve reliability and prevent abuse.",
+            "To contact you about your account, subscription, or inquiries you submit.",
+            "We do not sell your personal information to third parties for marketing.",
+          ],
+        },
+        {
+          title: "Sharing and storage",
+          body: [
+            "We may use trusted infrastructure providers (such as hosting and databases) to process data on our behalf under appropriate agreements.",
+            "We store data with reasonable security practices. No internet transmission is 100% secure; we work to protect your account and organization data.",
+          ],
+        },
+        {
+          title: "Cookies and similar technologies",
+          body: [
+            "We use local storage needed for session, language, and offline POS. We do not rely on third-party ad networks to track you across sites.",
+          ],
+        },
+        {
+          title: "Retention and your rights",
+          body: [
+            "We keep account data while your account is active, or as needed for legal and support obligations.",
+            "You may request correction or account deletion by contacting us. We may need to verify your identity before acting on a request.",
+          ],
+        },
+        {
+          title: "Changes to this policy",
+          body: [
+            "We may update this page when our practices change. Continued use after an update means you have reviewed the version published here.",
+          ],
+        },
+        {
+          title: "Contact",
+          body: ["For privacy questions: hello@icodo.io or use our Contact page."],
+        },
+      ],
+      ctaContact: "Contact us",
     },
     auth: {
       signInTitle: "Sign in",

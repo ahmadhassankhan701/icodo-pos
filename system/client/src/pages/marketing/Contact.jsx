@@ -116,7 +116,10 @@ export default function Contact() {
             <button type="submit" className="mkt-btn mkt-btn-primary mkt-btn-block">
               {ct.formSubmit}
             </button>
-            <p className="mkt-form-privacy">{ct.privacy}</p>
+            <p className="mkt-form-privacy">
+              {ct.privacy}{" "}
+              <Link to="/privacy">{c.nav.privacy}</Link>
+            </p>
           </form>
         </div>
       </section>

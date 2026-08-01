@@ -25,15 +25,20 @@ function payLabel(method, locale) {
 /**
  * نص فاتورة بسيط للطابعة النصية أو الحافظة
  */
-export function buildReceiptPlainText(sale, branchName, locale) {
+export function buildReceiptPlainText(sale, branchName, locale, taxInfo) {
   if (!sale) return "";
   const loc = locale === "en" ? "en-US" : "ar-SA";
-  const cur = locale === "en" ? "SAR" : "ر.س";
+  const cur =
+    (locale === "en" ? taxInfo?.currencyLabelEn || taxInfo?.currency : taxInfo?.currencyLabelAr) ||
+    (locale === "en" ? "SAR" : "ر.س");
   const lines = [];
   lines.push(locale === "en" ? "SALES INVOICE" : "فاتورة بيع");
   lines.push("---");
   const storeLine = branchName || sale.branch?.name || "";
   if (storeLine) lines.push(storeLine);
+  if (taxInfo?.vatNumber) {
+    lines.push(`${locale === "en" ? "VAT #" : "الرقم الضريبي"}: ${taxInfo.vatNumber}`);
+  }
   lines.push(`${locale === "en" ? "Date" : "التاريخ"}: ${new Date(sale.createdAt).toLocaleString(loc)}`);
   lines.push(`${locale === "en" ? "Invoice #" : "رقم الفاتورة"}: ${sale.invoiceNumber || sale.id}`);
   lines.push(`${locale === "en" ? "Cashier" : "الكاشير"}: ${sale.user?.name || "—"}`);
@@ -80,7 +85,11 @@ export function buildReceiptPlainText(sale, branchName, locale) {
   const disc = Number(sale.discountAmount ?? 0);
   if (disc > 0) lines.push(`${locale === "en" ? "Discount" : "الخصم"}: -${disc.toFixed(2)} ${cur}`);
   const tax = Number(sale.taxAmount ?? 0);
-  if (tax > 0) lines.push(`${locale === "en" ? "Tax" : "الضريبة"}: ${tax.toFixed(2)} ${cur}`);
+  const taxPct = sale.taxPercent != null ? Number(sale.taxPercent) : null;
+  if (tax > 0) {
+    const pctTxt = taxPct != null && !Number.isNaN(taxPct) ? ` (${taxPct}%)` : "";
+    lines.push(`${locale === "en" ? "Tax" : "الضريبة"}${pctTxt}: ${tax.toFixed(2)} ${cur}`);
+  }
   lines.push(`${locale === "en" ? "TOTAL" : "الإجمالي"}: ${Number(sale.total).toFixed(2)} ${cur}`);
   const dueLine = Number(sale.amountDue ?? 0);
   if (dueLine > 0.001) {

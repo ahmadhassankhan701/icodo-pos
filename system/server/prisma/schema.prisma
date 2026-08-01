@@ -45,12 +45,39 @@ model Organization {
   managerPermissions String?
   /// صلاحيات دور الموظف/الكاشير (JSON)
   cashierPermissions String?
+
+  /// Onboarding: account created → profile/docs → Stripe payment → complete
+  profileDocsDone Boolean @default(false)
+  paymentDone     Boolean @default(false)
+
+  /// Legal / KYC profile (Gulf businesses)
+  legalName             String?
+  country               String?
+  city                  String?
+  addressText           String?
+  crNumber              String?
+  licenseNumber         String?
+  ownerFullName         String?
+  ownerIdNumber         String?
+  ownerPhone            String?
+  vatNumber             String?
+  taxNumber             String?
+  iban                  String?
+  authorizedPersonName  String?
+  termsAcceptedAt       DateTime?
+
+  /// Stripe billing
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  selectedPlanInterval String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   users                    User[]
   branches                 Branch[]
   planPurchases            OrganizationPlanPurchase[]
+  onboardingDocuments      OrganizationDocument[]
   products                 Product[]
   brands                   Brand[]
   categories               Category[]
@@ -59,6 +86,7 @@ model Organization {
   customers                Customer[]
   suppliers                Supplier[]
   syncSettings             SyncSettings?
+  taxSettings              OrganizationTaxSettings?
   offlineInventoryReceipts OfflineInventoryReceipt[]
   notificationReads       NotificationRead[]
   loyaltyProgramSettings  LoyaltyProgramSettings?
@@ -84,6 +112,41 @@ model Organization {
   deliveryStops           DeliveryStop[]
   inventoryLots           InventoryLot[]
   saleItemLots            SaleItemLot[]
+}
+
+/// GCC VAT / tax pack per organization (default rate + receipt currency)
+model OrganizationTaxSettings {
+  id               String       @id @default(cuid())
+  organizationId   String       @unique
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// QA | SA | AE | KW | BH | OM
+  countryCode      String       @default("QA")
+  /// SAR | QAR | AED | KWD | BHD | OMR
+  currency         String       @default("QAR")
+  /// Standard VAT percent applied at POS (e.g. 15, 5, 0)
+  standardRate     Decimal      @default(0)
+  pricesIncludeTax Boolean      @default(false)
+  enabled          Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+/// Uploaded KYC / business documents for organization onboarding
+model OrganizationDocument {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// CR | OWNER_ID | VAT | LICENSE | IBAN
+  docType        String
+  fileName       String
+  mimeType       String
+  size           Int
+  data           Bytes
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, docType])
+  @@index([organizationId])
 }
 
 /// Organization subscription purchases and renewals shown in the Plan page.
@@ -979,6 +1042,8 @@ model Sale {
   total            Decimal
   discountAmount   Decimal         @default(0)
   taxAmount        Decimal         @default(0)
+  /// VAT percent applied on this sale (snapshot)
+  taxPercent       Decimal?
   paymentMethod    PaymentMethod
   paymentSplits    Json?
   cashSessionId    String?

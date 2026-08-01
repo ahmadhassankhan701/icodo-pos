@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { BUSINESS_VERTICAL_IDS, isMvpVerticalEnabled } from "../lib/businessVerticalIds.js";
 import { BusinessVerticalIcon } from "../lib/businessVerticalIcons.jsx";
+import { getPostAuthPath } from "../lib/onboardingPath.js";
 import { AuthShell } from "../marketing/AuthShell.jsx";
 import { useMarketingCopy } from "../marketing/copy.js";
 
@@ -60,9 +61,7 @@ export default function Register() {
     );
   }
   if (user) {
-    return (
-      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/dashboard"} replace />
-    );
+    return <Navigate to={getPostAuthPath(user)} replace />;
   }
 
   const applySuggestedSlug = () => {
@@ -100,7 +99,7 @@ export default function Register() {
     }
     setSubmitting(true);
     try {
-      await registerOrganization({
+      const created = await registerOrganization({
         registrationSecret: registrationSecret.trim() || undefined,
         organizationName: organizationName.trim(),
         organizationSlug: organizationSlug.trim().toLowerCase(),
@@ -110,7 +109,7 @@ export default function Register() {
         adminPassword,
         businessVertical,
       });
-      nav("/dashboard", { replace: true });
+      nav(getPostAuthPath(created), { replace: true });
     } catch (x) {
       setErr(x.message || t("register.failed"));
       const info = x?.data?.urlInfo;

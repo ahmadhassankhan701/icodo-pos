@@ -164,6 +164,7 @@ export default function Products() {
           priceDelta: String(m.priceDelta ?? "0"),
         }))
       : [];
+    const inv = Array.isArray(p.inventories) ? p.inventories[0] : null;
     setForm({
       name: p.name && p.nameEn && p.name === p.nameEn ? "" : p.name || "",
       nameEn: p.nameEn || "",
@@ -176,7 +177,7 @@ export default function Products() {
       sku: p.sku || "",
       barcode: p.barcode || "",
       initialStock: "",
-      minStockLevel: "",
+      minStockLevel: inv?.minStockLevel != null ? String(inv.minStockLevel) : "5",
       expiryDate: p.expiryDate ? String(p.expiryDate).slice(0, 10) : todayISO(),
       modifiers: mods,
     });
@@ -281,6 +282,13 @@ export default function Products() {
             ...(modifiersPayload !== undefined ? { modifiers: modifiersPayload } : {}),
           },
         });
+        const bid = activeBranchId;
+        if (bid && form.minStockLevel !== "" && form.minStockLevel != null) {
+          await api(`/api/inventory/${editId}/${bid}`, {
+            method: "PATCH",
+            body: { minStockLevel: Number(form.minStockLevel) },
+          });
+        }
         showToast(t("products.toastUpdated"), "success");
       }
       closeFormModal();
@@ -1028,31 +1036,30 @@ export default function Products() {
                 </div>
               </label>
               {formMode === "create" ? (
-                <>
-                  <label style={fld}>
-                    <span>{t("products.initialStock")}</span>
-                    <input
-                      style={inp}
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={form.initialStock}
-                      onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
-                    />
-                  </label>
-                  <label style={fld}>
-                    <span>{t("products.minLevel")}</span>
-                    <input
-                      style={inp}
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={form.minStockLevel}
-                      onChange={(e) => setForm({ ...form, minStockLevel: e.target.value })}
-                    />
-                  </label>
-                </>
+                <label style={fld}>
+                  <span>{t("products.initialStock")}</span>
+                  <input
+                    style={inp}
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={form.initialStock}
+                    onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
+                  />
+                </label>
               ) : null}
+              <label style={fld}>
+                <span>{t("products.minLevel")}</span>
+                <input
+                  style={inp}
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.minStockLevel}
+                  onChange={(e) => setForm({ ...form, minStockLevel: e.target.value })}
+                  disabled={formMode === "edit" && !activeBranchId}
+                />
+              </label>
               <label style={{ ...fld, gridColumn: "1 / -1" }}>
                 <span>{t("products.imageUrl")} *</span>
                 <input

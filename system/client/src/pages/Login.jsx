@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { getPostAuthPath } from "../lib/onboardingPath.js";
 import { AuthShell } from "../marketing/AuthShell.jsx";
 import { useMarketingCopy } from "../marketing/copy.js";
 
@@ -23,9 +24,7 @@ export default function Login() {
     );
   }
   if (user) {
-    return (
-      <Navigate to={user.isPlatformAdmin ? "/platform/organizations" : "/dashboard"} replace />
-    );
+    return <Navigate to={getPostAuthPath(user)} replace />;
   }
 
   const submit = async (e) => {
@@ -34,7 +33,7 @@ export default function Login() {
     setDbUrlInfo(null);
     try {
       const loggedIn = await login(email, password);
-      nav(loggedIn?.isPlatformAdmin ? "/platform/organizations" : "/dashboard", { replace: true });
+      nav(getPostAuthPath(loggedIn), { replace: true });
     } catch (x) {
       setErr(x.message || t("login.failed"));
       const info = x?.data?.urlInfo;

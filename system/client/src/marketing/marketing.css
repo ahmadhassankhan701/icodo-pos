@@ -1185,6 +1185,260 @@
   gap: 0.5rem;
 }
 
+.mkt-footer-bottom-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mkt-footer-bottom-links a {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.mkt-footer-bottom-links a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.mkt-privacy-updated {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, #fff 70%, transparent);
+}
+
+.mkt-privacy-doc {
+  max-width: 44rem;
+}
+
+.mkt-privacy-block {
+  margin-bottom: 2rem;
+}
+
+.mkt-privacy-block h2 {
+  font-family: var(--mkt-font-display);
+  font-size: 1.25rem;
+  margin: 0 0 0.65rem;
+  letter-spacing: -0.02em;
+}
+
+.mkt-privacy-block p {
+  margin: 0 0 0.65rem;
+  color: var(--mkt-muted);
+  line-height: 1.65;
+  font-size: 1rem;
+}
+
+.mkt-pricing-trial-section {
+  padding-top: 0;
+  margin-top: -1.25rem;
+  position: relative;
+  z-index: 2;
+}
+
+.mkt-pricing-trial {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.5rem 1.75rem;
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(ellipse 70% 80% at 0% 50%, rgba(56, 189, 248, 0.2), transparent 55%),
+    linear-gradient(135deg, #0f172a, #1e3a8a);
+  color: #f8fafc;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.mkt-pricing-trial h2 {
+  font-family: var(--mkt-font-display);
+  font-size: 1.2rem;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.mkt-pricing-trial p {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.78);
+  line-height: 1.55;
+  font-size: 0.95rem;
+  max-width: 40rem;
+}
+
+.mkt-pricing-trial-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mkt-sky) 35%, #fff);
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.mkt-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 2rem;
+  align-items: stretch;
+}
+
+.mkt-price-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.5rem 1.35rem;
+  border-radius: 1.15rem;
+  background: #fff;
+  border: 1px solid var(--mkt-line);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.mkt-price-card.is-featured {
+  border-color: color-mix(in srgb, var(--mkt-sky) 55%, var(--mkt-line));
+  box-shadow: 0 16px 36px rgba(30, 58, 138, 0.12);
+  transform: translateY(-4px);
+}
+
+.mkt-price-badge {
+  position: absolute;
+  top: 0.85rem;
+  inset-inline-end: 0.85rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mkt-sky) 28%, #fff);
+  color: var(--mkt-blue);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.mkt-price-card h3 {
+  font-family: var(--mkt-font-display);
+  font-size: 1.15rem;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.mkt-price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.mkt-price-amount strong {
+  font-family: var(--mkt-font-display);
+  font-size: 2.35rem;
+  letter-spacing: -0.04em;
+  color: var(--mkt-blue);
+  line-height: 1;
+}
+
+.mkt-price-amount span {
+  color: var(--mkt-muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.mkt-price-period {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--mkt-muted);
+}
+
+.mkt-price-note {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--mkt-text);
+  line-height: 1.45;
+}
+
+.mkt-price-features {
+  list-style: none;
+  margin: 0.35rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+}
+
+.mkt-price-features li {
+  position: relative;
+  padding-inline-start: 1.15rem;
+  color: var(--mkt-muted);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.mkt-price-features li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.45rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--mkt-sky);
+}
+
+.mkt-price-card .mkt-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: auto;
+}
+
+.mkt-pricing-includes {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem 1.5rem;
+}
+
+.mkt-pricing-includes li {
+  position: relative;
+  padding-inline-start: 1.25rem;
+  color: var(--mkt-muted);
+  line-height: 1.5;
+}
+
+.mkt-pricing-includes li::before {
+  content: "✓";
+  position: absolute;
+  inset-inline-start: 0;
+  color: var(--mkt-blue);
+  font-weight: 800;
+}
+
+.mkt-pricing-cta {
+  margin-top: 2.75rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--mkt-line);
+}
+
+.mkt-pricing-cta h2 {
+  font-family: var(--mkt-font-display);
+  font-size: 1.65rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.03em;
+}
+
+.mkt-pricing-cta p {
+  margin: 0;
+  color: var(--mkt-muted);
+  max-width: 36rem;
+  line-height: 1.55;
+}
+
 @media (max-width: 900px) {
   .mkt-grid-3,
   .mkt-stats,
@@ -1196,8 +1450,18 @@
   .mkt-leader-grid,
   .mkt-process,
   .mkt-contact-layout,
-  .mkt-form-row {
+  .mkt-form-row,
+  .mkt-pricing-grid,
+  .mkt-pricing-includes {
     grid-template-columns: 1fr;
+  }
+
+  .mkt-pricing-trial {
+    grid-template-columns: 1fr;
+  }
+
+  .mkt-price-card.is-featured {
+    transform: none;
   }
 
   .mkt-page-hero--premium {
@@ -1287,5 +1551,147 @@
 @media (min-width: 901px) {
   .mkt-nav-mobile {
     display: none;
+  }
+}
+
+/* —— Onboarding wizard —— */
+.mkt-onboarding-steps {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+}
+
+.mkt-onboarding-steps li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--mkt-muted);
+  font-weight: 600;
+}
+
+.mkt-onboarding-step-n {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.75rem;
+}
+
+.mkt-onboarding-steps li.is-active {
+  color: var(--mkt-blue);
+}
+
+.mkt-onboarding-steps li.is-active .mkt-onboarding-step-n {
+  background: var(--mkt-blue);
+  color: #fff;
+}
+
+.mkt-onboarding-steps li.is-done .mkt-onboarding-step-n {
+  background: color-mix(in srgb, var(--mkt-sky) 55%, #fff);
+  color: var(--mkt-blue);
+}
+
+.mkt-onboarding-fieldset {
+  border: 1px solid var(--mkt-line);
+  border-radius: 0.85rem;
+  padding: 1rem 1rem 0.25rem;
+  margin: 0 0 1rem;
+}
+
+.mkt-onboarding-fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.mkt-onboarding-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  color: var(--mkt-muted);
+  line-height: 1.5;
+}
+
+.mkt-onboarding-file-meta {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--mkt-muted);
+}
+
+.mkt-onboarding-file-meta.is-ok {
+  color: #15803d;
+}
+
+.mkt-onboarding-check {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-size: 0.9rem;
+  margin: 0.25rem 0 1rem;
+  color: var(--mkt-ink);
+}
+
+.mkt-onboarding-check input {
+  margin-top: 0.2rem;
+}
+
+.mkt-onboarding-trial {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--mkt-sky) 22%, #fff);
+  color: var(--mkt-blue);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.mkt-onboarding-plans {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.mkt-onboarding-plan {
+  text-align: start;
+  border: 1px solid var(--mkt-line);
+  background: #fff;
+  border-radius: 0.85rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.mkt-onboarding-plan.is-selected {
+  border-color: var(--mkt-blue);
+  box-shadow: 0 0 0 1px var(--mkt-blue);
+  background: color-mix(in srgb, var(--mkt-sky) 12%, #fff);
+}
+
+.mkt-onboarding-plan-price {
+  font-family: var(--mkt-font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--mkt-blue);
+}
+
+.mkt-onboarding-plan-note {
+  font-size: 0.82rem;
+  color: var(--mkt-muted);
+}
+
+@media (max-width: 900px) {
+  .mkt-onboarding-steps {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

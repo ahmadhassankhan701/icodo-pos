@@ -60,6 +60,16 @@ export default function Purchases() {
     loadPurchases().catch(() => setList([]));
   }, [branchId]);
 
+  useEffect(() => {
+    if (!branchId) {
+      setRecommendations([]);
+      setSelectedRecommendations({});
+      return;
+    }
+    loadAutoRecommendations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when branch or lookback/target change
+  }, [branchId, lookbackDays, targetStockDays]);
+
   const addSupplier = async (e) => {
     e.preventDefault();
     if (!newSupplier.name.trim()) return;

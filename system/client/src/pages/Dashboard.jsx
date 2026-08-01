@@ -57,6 +57,7 @@ export default function Dashboard() {
   const [topServices, setTopServices] = useState([]);
   const [salesByEmployees, setSalesByEmployees] = useState([]);
   const [byBranch, setByBranch] = useState([]);
+  const [reorderSuggestions, setReorderSuggestions] = useState([]);
 
   useEffect(() => {
     const q = branchId ? `?branchId=${branchId}` : "";
@@ -77,6 +78,16 @@ export default function Dashboard() {
       setTopCustomers(Array.isArray(tc) ? tc : []);
       setTopServices(Array.isArray(ts) ? ts : []);
       setSalesByEmployees(Array.isArray(se) ? se : []);
+      if (branchId) {
+        api(`/api/purchases/reorder-recommendations?branchId=${encodeURIComponent(branchId)}&lookbackDays=30&targetStockDays=21`)
+          .then((res) => {
+            const rows = Array.isArray(res?.recommendations) ? res.recommendations : [];
+            setReorderSuggestions(rows.slice(0, 8));
+          })
+          .catch(() => setReorderSuggestions([]));
+      } else {
+        setReorderSuggestions([]);
+      }
       if (user?.role === "ADMIN" && !branchId) {
         try {
           const bb = await api("/api/dashboard/sales-by-branch");
@@ -218,7 +229,16 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ) : null}
-                <div className="dash-mini-kpi">
+                <div
+                  className="dash-mini-kpi"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => navigate("/purchases")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") navigate("/purchases");
+                  }}
+                >
                   <span className="dash-mini-ico tone-warn">
                     <DashIcon name="alert" size={18} />
                   </span>
@@ -228,6 +248,41 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+
+              {reorderSuggestions.length > 0 ? (
+                <section className="dash-shell-card dash-customers-strip">
+                  <div className="dash-strip-head">
+                    <h3>{t("dashboard.reorderTitle")}</h3>
+                    <Link to="/purchases" className="dash-link-all">
+                      {t("dashboard.reorderOpenPurchases")}
+                      <span aria-hidden>→</span>
+                    </Link>
+                  </div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+                    {reorderSuggestions.map((r) => (
+                      <li
+                        key={r.productId}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          fontSize: 13,
+                          padding: "6px 0",
+                          borderBottom: "1px solid var(--border)",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600 }}>{r.name}</span>
+                        <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
+                          {t("dashboard.reorderLine", {
+                            stock: String(r.currentQty),
+                            suggest: String(r.suggestedQty),
+                          })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
               <section className="dash-shell-card dash-customers-strip">
                 <div className="dash-strip-head">

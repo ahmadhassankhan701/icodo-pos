@@ -26,6 +26,7 @@ import heldCartRoutes from "./routes/heldCarts.js";
 import platformRoutes from "./routes/platform.js";
 import notificationRoutes from "./routes/notifications.js";
 import loyaltySettingsRoutes from "./routes/loyaltySettings.js";
+import taxSettingsRoutes from "./routes/taxSettings.js";
 import couponsRoutes from "./routes/coupons.js";
 import employeesRoutes from "./routes/employees.js";
 import payrollRoutes from "./routes/payroll.js";
@@ -39,6 +40,8 @@ import accountingRoutes from "./routes/accounting.js";
 import automationsRoutes from "./routes/automations.js";
 import commissionsRoutes from "./routes/commissions.js";
 import planRoutes from "./routes/plan.js";
+import onboardingRoutes from "./routes/onboarding.js";
+import billingWebhookRoutes from "./routes/billingWebhook.js";
 import { prisma } from "./lib/prisma.js";
 import {
   dbUnavailableMessage,
@@ -68,6 +71,8 @@ if (process.env.VERCEL) {
 
 app.use(helmetMiddleware);
 app.use(cors({ origin: true, credentials: true }));
+/** Stripe webhook needs raw body — mount before express.json() */
+app.use("/api/billing", billingWebhookRoutes);
 app.use(express.json({ limit: "2mb" }));
 app.use("/api/auth/login", loginRateLimiter);
 app.use("/api/auth/register-organization", loginRateLimiter);
@@ -120,6 +125,7 @@ app.use("/api/accounting", accountingRoutes);
 app.use("/api/automations", automationsRoutes);
 app.use("/api/commissions", commissionsRoutes);
 app.use("/api/plan", planRoutes);
+app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/refunds", refundRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
@@ -129,6 +135,7 @@ app.use("/api/held-carts", heldCartRoutes);
 app.use("/api/platform", platformRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/loyalty-settings", loyaltySettingsRoutes);
+app.use("/api/tax-settings", taxSettingsRoutes);
 app.use("/api/coupons", couponsRoutes);
 app.use("/api/employees", employeesRoutes);
 app.use("/api/payroll", payrollRoutes);

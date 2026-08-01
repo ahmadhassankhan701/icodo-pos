@@ -15,6 +15,8 @@ export async function bootstrapOrganization(prisma, input) {
     adminPassword,
     adminName,
     businessVertical,
+    /** When true (platform-created orgs), skip KYC + payment gates */
+    onboardingComplete = false,
   } = input;
 
   const name = String(organizationName).trim().slice(0, 200);
@@ -32,6 +34,8 @@ export async function bootstrapOrganization(prisma, input) {
       slug: slugRaw,
       plan: "FREE",
       maxBranches: 3,
+      profileDocsDone: Boolean(onboardingComplete),
+      paymentDone: Boolean(onboardingComplete),
       ...(businessVertical != null ? { businessVertical } : {}),
     },
   });

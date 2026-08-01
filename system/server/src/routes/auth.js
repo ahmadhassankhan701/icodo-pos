@@ -51,9 +51,13 @@ router.post("/register-organization", async (req, res, next) => {
 
     const businessVertical = normalizeBusinessVertical(businessVerticalRaw, {
       required: true,
+      mvpOnly: true,
     });
     if (!businessVertical) {
-      return res.status(400).json({ error: "اختر مجال النشاط التجاري من القائمة" });
+      return res.status(400).json({
+        error:
+          "اختر مجال نشاط مدعوماً حالياً: بقالة، صيدلية، أو مقهى / Choose a supported type: grocery, pharmacy, or café",
+      });
     }
     const name = organizationName != null ? String(organizationName).trim() : "";
     const slugRaw =

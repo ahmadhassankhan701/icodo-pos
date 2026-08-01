@@ -88,6 +88,7 @@ router.post("/organizations", async (req, res, next) => {
       adminEmail,
       adminPassword,
       adminName,
+      onboardingComplete: true,
       ...(bvNorm ? { businessVertical: bvNorm } : {}),
     });
 

@@ -12,12 +12,16 @@ async function main() {
       name: "المتجر الافتراضي",
       slug: "ezoo",
       businessVertical: "GROCERY",
+      profileDocsDone: true,
+      paymentDone: true,
     },
     create: {
       id: ORG_ID,
       name: "المتجر الافتراضي",
       slug: "ezoo",
       businessVertical: "GROCERY",
+      profileDocsDone: true,
+      paymentDone: true,
     },
   });
 

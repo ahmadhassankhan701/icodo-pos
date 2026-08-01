@@ -8,6 +8,7 @@ import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
 import { branchDisplayName } from "../utils/displayLabels.js";
 import { InvoicePrint } from "../components/InvoicePrint.jsx";
 import { PaymentReceiptPrint } from "../components/PaymentReceiptPrint.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 
 function paymentLabel(t, method) {
   const m = String(method || "").toUpperCase();
@@ -22,6 +23,7 @@ function paymentLabel(t, method) {
 
 export default function CustomerReceivables() {
   const { t, locale } = useI18n();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const { classFor } = usePrintSettings();
   const branchId = useActiveBranchId();
@@ -215,7 +217,7 @@ export default function CustomerReceivables() {
         aria-hidden="true"
       >
         {printSale ? (
-          <InvoicePrint sale={printSale} branchName={printSale.branch?.name} />
+          <InvoicePrint sale={printSale} branchName={printSale.branch?.name} taxInfo={user?.tax} />
         ) : printCollection ? (
           <PaymentReceiptPrint txn={printCollection} />
         ) : null}

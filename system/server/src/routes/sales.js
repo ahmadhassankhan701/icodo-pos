@@ -25,6 +25,7 @@ import {
   consumeLotsFefo,
   ensureLotsCoverQuantity,
 } from "../lib/inventoryLots.js";
+import { getOrCreateTaxSettings, resolveSaleTaxPercent } from "../lib/taxPacks.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -332,11 +333,11 @@ router.post("/checkout", async (req, res) => {
     const afterLoyaltyNum = roundMoney(afterCouponNum - loyaltyDiscountNum);
     const afterLoyaltyDec = new Prisma.Decimal(afterLoyaltyNum.toFixed(2));
 
+    const taxSettings = await getOrCreateTaxSettings(prisma, orgId);
+    const tp = resolveSaleTaxPercent(taxPercentRaw, taxSettings);
     let taxDec = new Prisma.Decimal(0);
-    const tp = Number(taxPercentRaw);
-    if (!Number.isNaN(tp) && tp > 0) {
-      const rate = Math.min(100, tp);
-      taxDec = afterLoyaltyDec.mul(new Prisma.Decimal(rate)).div(100);
+    if (tp > 0) {
+      taxDec = afterLoyaltyDec.mul(new Prisma.Decimal(tp)).div(100);
     }
     const grandTotal = afterLoyaltyDec.add(taxDec);
     const grandNum = roundMoney(Number(grandTotal.toString()));
@@ -502,6 +503,7 @@ router.post("/checkout", async (req, res) => {
           total: grandTotal,
           discountAmount: discountDec,
           taxAmount: taxDec,
+          taxPercent: new Prisma.Decimal(tp.toFixed(2)),
           amountPaid: new Prisma.Decimal(amountPaidNum.toFixed(2)),
           amountDue: new Prisma.Decimal(amountDueNum.toFixed(2)),
           invoiceNumber: generateInvoiceNumber(bid),

@@ -41,6 +41,9 @@ export function MarketingLayout() {
             <NavLink to="/about" className={navClass}>
               {c.nav.about}
             </NavLink>
+            <NavLink to="/pricing" className={navClass}>
+              {c.nav.pricing}
+            </NavLink>
             <NavLink to="/contact" className={navClass}>
               {c.nav.contact}
             </NavLink>
@@ -78,6 +81,7 @@ export function MarketingLayout() {
               {c.nav.home}
             </NavLink>
             <NavLink to="/about">{c.nav.about}</NavLink>
+            <NavLink to="/pricing">{c.nav.pricing}</NavLink>
             <NavLink to="/contact">{c.nav.contact}</NavLink>
           </div>
         ) : null}
@@ -98,6 +102,9 @@ export function MarketingLayout() {
               <div>
                 <h4>{c.footer.product}</h4>
                 <ul>
+                  <li>
+                    <Link to="/pricing">{c.nav.pricing}</Link>
+                  </li>
                   <li>
                     <Link to="/register">{c.nav.signUp}</Link>
                   </li>
@@ -121,6 +128,9 @@ export function MarketingLayout() {
                     <Link to="/contact">{c.nav.contact}</Link>
                   </li>
                   <li>
+                    <Link to="/privacy">{c.nav.privacy}</Link>
+                  </li>
+                  <li>
                     <a href="mailto:hello@icodo.io">hello@icodo.io</a>
                   </li>
                 </ul>
@@ -131,7 +141,10 @@ export function MarketingLayout() {
             <span>
               © {new Date().getFullYear()} i codo. {c.footer.rights}
             </span>
-            <span>{c.footer.builtBy}</span>
+            <div className="mkt-footer-bottom-links">
+              <Link to="/privacy">{c.nav.privacy}</Link>
+              <span>{c.footer.builtBy}</span>
+            </div>
           </div>
         </div>
       </footer>
