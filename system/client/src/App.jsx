@@ -16,6 +16,8 @@ import OnboardingProfile from "./pages/onboarding/OnboardingProfile.jsx";
 import OnboardingPayment from "./pages/onboarding/OnboardingPayment.jsx";
 import OnboardingPaymentSuccess from "./pages/onboarding/OnboardingPaymentSuccess.jsx";
 import OnboardingPending from "./pages/onboarding/OnboardingPending.jsx";
+import OnboardingReview from "./pages/onboarding/OnboardingReview.jsx";
+import OnboardingRejected from "./pages/onboarding/OnboardingRejected.jsx";
 import { getPostAuthPath, isOnboardingComplete } from "./lib/onboardingPath.js";
 import POS from "./pages/POS.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -55,6 +57,9 @@ const loadHrLoans = () => import("./pages/hr/HrLoans.jsx");
 const loadPlatformLayout = () => import("./components/layout/PlatformLayout.jsx");
 const loadPlatformOrganizations = () => import("./pages/PlatformOrganizations.jsx");
 const loadPlatformUsers = () => import("./pages/PlatformUsers.jsx");
+const loadPlatformAnalytics = () => import("./pages/PlatformAnalytics.jsx");
+const loadPlatformOnboardingQueue = () => import("./pages/PlatformOnboardingQueue.jsx");
+const loadPlatformOnboardingDetail = () => import("./pages/PlatformOnboardingDetail.jsx");
 
 const Reports = React.lazy(loadReports);
 const Appointments = React.lazy(loadAppointments);
@@ -69,6 +74,9 @@ const HrLoans = React.lazy(loadHrLoans);
 const PlatformLayout = React.lazy(loadPlatformLayout);
 const PlatformOrganizations = React.lazy(loadPlatformOrganizations);
 const PlatformUsers = React.lazy(loadPlatformUsers);
+const PlatformAnalytics = React.lazy(loadPlatformAnalytics);
+const PlatformOnboardingQueue = React.lazy(loadPlatformOnboardingQueue);
+const PlatformOnboardingDetail = React.lazy(loadPlatformOnboardingDetail);
 
 function Protected({ children, roles, permission, anyPermission }) {
   const { user, loading, can } = useAuth();
@@ -219,6 +227,22 @@ export default function App() {
           }
         />
         <Route
+          path="/onboarding/review"
+          element={
+            <RequireAuth>
+              <OnboardingReview />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/onboarding/rejected"
+          element={
+            <RequireAuth>
+              <OnboardingRejected />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/platform"
           element={
             <Protected>
@@ -228,7 +252,10 @@ export default function App() {
             </Protected>
           }
         >
-          <Route index element={<Navigate to="/platform/organizations" replace />} />
+          <Route index element={<Navigate to="/platform/analytics" replace />} />
+          <Route path="analytics" element={<PlatformAnalytics />} />
+          <Route path="onboarding" element={<PlatformOnboardingQueue />} />
+          <Route path="onboarding/:orgId" element={<PlatformOnboardingDetail />} />
           <Route path="organizations" element={<PlatformOrganizations />} />
           <Route path="users" element={<PlatformUsers />} />
         </Route>

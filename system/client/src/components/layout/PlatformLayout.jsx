@@ -29,6 +29,12 @@ export function PlatformLayout() {
           </div>
         </div>
         <nav className="app-sidebar-nav">
+          <NavLink to="/platform/analytics" className={({ isActive }) => `app-sidebar-link${isActive ? " is-active" : ""}`}>
+            {t("platform.analytics")}
+          </NavLink>
+          <NavLink to="/platform/onboarding" className={({ isActive }) => `app-sidebar-link${isActive ? " is-active" : ""}`}>
+            {t("platform.onboardingNav")}
+          </NavLink>
           <NavLink to="/platform/organizations" className={({ isActive }) => `app-sidebar-link${isActive ? " is-active" : ""}`}>
             {t("platform.orgs")}
           </NavLink>

@@ -3,6 +3,7 @@ import { useI18n } from "../context/LanguageContext.jsx";
 import { productDisplayName } from "../utils/productName.js";
 import { useSafeImageSrc } from "../hooks/useSafeImageSrc.js";
 import { ProductImagePlaceholder } from "./ProductImagePlaceholder.jsx";
+import { useOrgCurrency } from "../lib/orgCurrency.js";
 
 const PET_KEYS = { CAT: "pet.cat", DOG: "pet.dog", OTHER: "pet.other" };
 
@@ -18,6 +19,7 @@ export function ProductCard({
   compact = false,
 }) {
   const { t, locale } = useI18n();
+  const { label: currencyLabel } = useOrgCurrency();
   const [imgErr, setImgErr] = useState(false);
   const inv = product.inventories?.[0];
   const stock = inv?.quantity ?? 0;
@@ -103,7 +105,7 @@ export function ProductCard({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", gap: 4 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span style={{ fontWeight: 800, fontSize: compact ? 13 : 18 }}>
-            {displayPrice.toFixed(2)} {t("common.currency")}
+            {displayPrice.toFixed(2)} {currencyLabel}
           </span>
           {useWholesalePricing && wholesale != null ? (
             <span style={{ fontSize: 10, color: "var(--muted)" }}>

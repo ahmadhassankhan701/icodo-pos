@@ -4,11 +4,12 @@ import { api } from "../../api/client.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { getPostAuthPath, isOnboardingComplete } from "../../lib/onboardingPath.js";
+import { currencyLabel } from "../../lib/fxGulf.js";
 import { OnboardingShell } from "./OnboardingShell.jsx";
 
 export default function OnboardingPayment() {
   const { user, loading, refreshUser } = useAuth();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const [plans, setPlans] = useState([]);
@@ -16,6 +17,7 @@ export default function OnboardingPayment() {
   const [err, setErr] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [boot, setBoot] = useState(true);
+  const [currencyLocal, setCurrencyLocal] = useState("SAR");
 
   useEffect(() => {
     if (params.get("cancelled") === "1") {
@@ -34,6 +36,7 @@ export default function OnboardingPayment() {
     api("/api/onboarding/status")
       .then((data) => {
         setPlans(data.onboarding?.plans || []);
+        setCurrencyLocal(data.onboarding?.currencyLocal || user?.tax?.currency || "SAR");
         if (data.onboarding?.selectedPlanInterval) {
           setSelected(data.onboarding.selectedPlanInterval);
         }
@@ -65,8 +68,8 @@ export default function OnboardingPayment() {
         body: { planInterval: selected },
       });
       if (data.bypass) {
-        await refreshUser();
-        nav("/dashboard", { replace: true });
+        const u = await refreshUser();
+        nav(getPostAuthPath(u || user), { replace: true });
         return;
       }
       if (data.url) {
@@ -81,6 +84,8 @@ export default function OnboardingPayment() {
     }
   };
 
+  const localLabel = currencyLabel(currencyLocal, locale);
+
   return (
     <OnboardingShell
       stepKey="payment"
@@ -92,25 +97,34 @@ export default function OnboardingPayment() {
         {(plans.length
           ? plans
           : [
-              { id: "month", amount: 150 },
-              { id: "six", amount: 600 },
-              { id: "year", amount: 1000 },
+              { id: "month", amountSar: 150, amountLocal: 150 },
+              { id: "six", amountSar: 600, amountLocal: 600 },
+              { id: "year", amountSar: 1000, amountLocal: 1000 },
             ]
-        ).map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className={`mkt-onboarding-plan${selected === p.id ? " is-selected" : ""}`}
-            onClick={() => setSelected(p.id)}
-          >
-            <strong>{t(`onboarding.plan.${p.id}`)}</strong>
-            <span className="mkt-onboarding-plan-price">
-              {p.amount} {t("common.currency")}
-            </span>
-            <span className="mkt-onboarding-plan-note">{t(`onboarding.planNote.${p.id}`)}</span>
-          </button>
-        ))}
+        ).map((p) => {
+          const localAmt = p.amountLocal != null ? p.amountLocal : p.amountSar ?? p.amount;
+          const sarAmt = p.amountSar != null ? p.amountSar : p.amount;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              className={`mkt-onboarding-plan${selected === p.id ? " is-selected" : ""}`}
+              onClick={() => setSelected(p.id)}
+            >
+              <strong>{t(`onboarding.plan.${p.id}`)}</strong>
+              <span className="mkt-onboarding-plan-price">
+                {localAmt} {localLabel}
+              </span>
+              <span className="mkt-onboarding-plan-note">
+                {t(`onboarding.planNote.${p.id}`)}
+                {currencyLocal !== "SAR" ? ` · ${sarAmt} SAR` : ""}
+              </span>
+            </button>
+          );
+        })}
       </div>
+
+      <p className="mkt-onboarding-hint">{t("onboarding.chargedInSar")}</p>
 
       {err ? (
         <div className="mkt-error" role="alert">

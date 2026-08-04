@@ -33,6 +33,7 @@ import { isUnitPriceAtOrBelowCost } from "../utils/saleCostWarning.js";
 import { productDisplayName } from "../utils/productName.js";
 import { ProductImagePreview } from "../components/ProductImagePreview.jsx";
 import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
+import { useOrgCurrency } from "../lib/orgCurrency.js";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -45,6 +46,7 @@ function productHasModifiers(p) {
 export default function POS() {
   const { classFor } = usePrintSettings();
   const { user, can } = useAuth();
+  const { label: currencyLabel } = useOrgCurrency();
   const { refreshPending } = useOffline();
   const { t, locale } = useI18n();
   const branchId = useActiveBranchId();
@@ -802,7 +804,7 @@ export default function POS() {
                         </span>
                       </span>
                       <span className="pos-search__option-price">
-                        {price.toFixed(2)} {t("common.currency")}
+                        {price.toFixed(2)} {currencyLabel}
                       </span>
                     </button>
                   );
@@ -922,7 +924,7 @@ export default function POS() {
                     <span style={{ flex: "1 1 140px", fontSize: 14 }}>
                       {h.label || `#${h.id.slice(0, 8)}`}
                       <span style={{ color: "var(--muted)", marginInlineStart: 8 }}>
-                        {Number(h.subtotal).toFixed(2)} {t("common.currency")} · {h.lineCount}{" "}
+                        {Number(h.subtotal).toFixed(2)} {currencyLabel} · {h.lineCount}{" "}
                         {locale === "en" ? "lines" : "سطر"}
                       </span>
                     </span>
@@ -1074,7 +1076,7 @@ export default function POS() {
             {selectedCustomer && selectedCustomer.accountBalance != null ? (
               <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
                 {t("receivable.balance")}:{" "}
-                <strong>{Number(selectedCustomer.accountBalance).toFixed(2)}</strong> {t("common.currency")}
+                <strong>{Number(selectedCustomer.accountBalance).toFixed(2)}</strong> {currencyLabel}
               </div>
             ) : null}
             <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
@@ -1234,7 +1236,7 @@ export default function POS() {
                   {t("pos.splitAdd")}
                 </button>
                 <div style={{ fontSize: 13, color: "var(--muted)" }}>
-                  {t("pos.afterDiscount")}: {amountDue.toFixed(2)} {t("common.currency")}
+                  {t("pos.afterDiscount")}: {amountDue.toFixed(2)} {currencyLabel}
                   {" · "}
                   {t("pos.splitSum")}: {splitSum.toFixed(2)}
                   {Math.abs(splitRemaining) > 0.009 ? (
@@ -1274,14 +1276,14 @@ export default function POS() {
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}>
               <span>{t("pos.subtotal")}</span>
               <span>
-                {cartSubtotal.toFixed(2)} {t("common.currency")}
+                {cartSubtotal.toFixed(2)} {currencyLabel}
               </span>
             </div>
             {discountNum > 0 ? (
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14, color: "var(--muted)" }}>
                 <span>{t("invoice.discount")}</span>
                 <span>
-                  −{discountNum.toFixed(2)} {t("common.currency")}
+                  −{discountNum.toFixed(2)} {currencyLabel}
                 </span>
               </div>
             ) : null}
@@ -1313,7 +1315,7 @@ export default function POS() {
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14 }}>
                 <span>{t("invoice.tax")}</span>
                 <span>
-                  {taxPreview.toFixed(2)} {t("common.currency")}
+                  {taxPreview.toFixed(2)} {currencyLabel}
                 </span>
               </div>
             ) : null}
@@ -1334,13 +1336,13 @@ export default function POS() {
             <div className="pos-checkout-dock__total">
               <span>{t("pos.afterDiscount")}</span>
               <span>
-                {amountDue.toFixed(2)} {t("common.currency")}
+                {amountDue.toFixed(2)} {currencyLabel}
               </span>
             </div>
             {items.length > 0 ? (
               <div className="pos-checkout-dock__hint">
                 {items.length} {locale === "en" ? "lines" : "سطر"} · {t("pos.subtotal")}{" "}
-                {cartSubtotal.toFixed(2)} {t("common.currency")}
+                {cartSubtotal.toFixed(2)} {currencyLabel}
               </div>
             ) : null}
             {msg ? <div className="pos-checkout-dock__msg">{msg}</div> : null}
@@ -1422,7 +1424,7 @@ export default function POS() {
                     <span style={{ color: "var(--muted)", fontSize: 13 }}>
                       {delta === 0
                         ? "—"
-                        : `${delta > 0 ? "+" : ""}${delta.toFixed(2)} ${t("common.currency")}`}
+                        : `${delta > 0 ? "+" : ""}${delta.toFixed(2)} ${currencyLabel}`}
                     </span>
                   </label>
                 );

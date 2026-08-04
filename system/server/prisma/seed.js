@@ -14,6 +14,8 @@ async function main() {
       businessVertical: "GROCERY",
       profileDocsDone: true,
       paymentDone: true,
+      onboardingReviewStatus: "APPROVED",
+      country: "QA",
     },
     create: {
       id: ORG_ID,
@@ -22,6 +24,8 @@ async function main() {
       businessVertical: "GROCERY",
       profileDocsDone: true,
       paymentDone: true,
+      onboardingReviewStatus: "APPROVED",
+      country: "QA",
     },
   });
 

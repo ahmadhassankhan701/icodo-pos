@@ -1,12 +1,26 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { useMarketingCopy } from "../../marketing/copy.js";
+import { currencyFromCountry, currencyLabel, sarToLocal } from "../../lib/fxGulf.js";
+
+const COUNTRIES = [
+  { code: "SA", ar: "السعودية", en: "Saudi Arabia" },
+  { code: "QA", ar: "قطر", en: "Qatar" },
+  { code: "AE", ar: "الإمارات", en: "UAE" },
+  { code: "KW", ar: "الكويت", en: "Kuwait" },
+  { code: "BH", ar: "البحرين", en: "Bahrain" },
+  { code: "OM", ar: "عُمان", en: "Oman" },
+];
 
 export default function Pricing() {
   const { locale } = useI18n();
   const c = useMarketingCopy(locale);
   const pr = c.pricing;
+  const [country, setCountry] = useState("SA");
+
+  const currency = useMemo(() => currencyFromCountry(country), [country]);
+  const label = currencyLabel(currency, locale);
 
   return (
     <>
@@ -41,35 +55,63 @@ export default function Pricing() {
           <div className="mkt-section-head">
             <span className="mkt-kicker">{pr.kicker}</span>
             <h2>{pr.title}</h2>
+            <label style={{ display: "grid", gap: 6, maxWidth: 280, marginTop: 12 }}>
+              <span style={{ fontSize: 13, color: "var(--mkt-muted)" }}>
+                {locale === "en" ? "Show prices in" : "عرض الأسعار بـ"}
+              </span>
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                style={{ minHeight: 42, borderRadius: 10, padding: "8px 10px" }}
+              >
+                {COUNTRIES.map((co) => (
+                  <option key={co.code} value={co.code}>
+                    {locale === "en" ? co.en : co.ar}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="mkt-pricing-grid">
-            {pr.plans.map((plan) => (
-              <article
-                key={plan.id}
-                className={`mkt-price-card${plan.highlight ? " is-featured" : ""}`}
-              >
-                {plan.highlight ? <span className="mkt-price-badge">{pr.featured}</span> : null}
-                <h3>{plan.name}</h3>
-                <div className="mkt-price-amount">
-                  <strong>{plan.price}</strong>
-                  <span>{pr.currency}</span>
-                </div>
-                <p className="mkt-price-period">{plan.period}</p>
-                <p className="mkt-price-note">{plan.note}</p>
-                <ul className="mkt-price-features">
-                  {plan.features.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-                <Link
-                  to="/register"
-                  className={`mkt-btn ${plan.highlight ? "mkt-btn-primary" : "mkt-btn-ghost"}`}
+            {pr.plans.map((plan) => {
+              const sar = Number(plan.price) || 0;
+              const local = sarToLocal(sar, currency);
+              return (
+                <article
+                  key={plan.id}
+                  className={`mkt-price-card${plan.highlight ? " is-featured" : ""}`}
                 >
-                  {pr.ctaRegister}
-                </Link>
-              </article>
-            ))}
+                  {plan.highlight ? <span className="mkt-price-badge">{pr.featured}</span> : null}
+                  <h3>{plan.name}</h3>
+                  <div className="mkt-price-amount">
+                    <strong>{local}</strong>
+                    <span>{label}</span>
+                  </div>
+                  <p className="mkt-price-period">{plan.period}</p>
+                  <p className="mkt-price-note">
+                    {plan.note}
+                    {currency !== "SAR" ? ` · ${sar} SAR` : ""}
+                  </p>
+                  <ul className="mkt-price-features">
+                    {plan.features.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                  <Link
+                    to="/register"
+                    className={`mkt-btn ${plan.highlight ? "mkt-btn-primary" : "mkt-btn-ghost"}`}
+                  >
+                    {pr.ctaRegister}
+                  </Link>
+                </article>
+              );
+            })}
           </div>
+          <p style={{ marginTop: 16, color: "var(--mkt-muted)", fontSize: 0.92 }}>
+            {locale === "en"
+              ? "Subscription is billed in SAR via Stripe. Local amounts are approximate for display."
+              : "يُحصَّل الاشتراك بالريال السعودي عبر Stripe. المبالغ المحلية تقريبية للعرض."}
+          </p>
         </div>
       </section>
 

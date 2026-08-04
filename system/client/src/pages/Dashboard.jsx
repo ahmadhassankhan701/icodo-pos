@@ -22,6 +22,7 @@ import { useActiveBranchId } from "../context/BranchContext.jsx";
 import { usePrintSettings } from "../context/PrintSettingsContext.jsx";
 import { printPaperClass } from "../utils/printPaper.js";
 import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
+import { useOrgCurrency } from "../lib/orgCurrency.js";
 
 const tooltipStyle = {
   background: "var(--surface)",
@@ -44,6 +45,7 @@ export default function Dashboard() {
   const { sizes } = usePrintSettings();
   const { user } = useAuth();
   const { t, locale } = useI18n();
+  const { format: cur } = useOrgCurrency();
   const navigate = useNavigate();
   const branchId = useActiveBranchId();
   const showWholesale = isVerticalFeatureEnabled("wholesale", user?.businessVertical);
@@ -101,8 +103,6 @@ export default function Dashboard() {
     };
     run().catch(() => {});
   }, [branchId, user?.role]);
-
-  const cur = (v) => `${Number(v).toFixed(2)} ${t("common.currency")}`;
 
   const employeeRowName = (r) => {
     if (locale === "en" && r.nameEn?.trim()) return r.nameEn.trim();

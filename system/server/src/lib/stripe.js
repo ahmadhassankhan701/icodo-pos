@@ -32,18 +32,18 @@ export function appPublicUrl() {
 }
 
 export function stripeCurrency() {
-  return String(process.env.STRIPE_CURRENCY || "sar").toLowerCase();
+  // Billing is always SAR regardless of tenant display currency.
+  return "sar";
 }
 
 export function buildCheckoutLineItem(planInterval) {
   const plan = PLAN_INTERVALS[planInterval];
   if (!plan) return null;
-  const currency = stripeCurrency();
   const productName = `ICODO POS — ${plan.labelEn}`;
   return {
     quantity: 1,
     price_data: {
-      currency,
+      currency: "sar",
       unit_amount: Math.round(plan.amount * 100),
       recurring: {
         interval: plan.interval,
@@ -51,7 +51,7 @@ export function buildCheckoutLineItem(planInterval) {
       },
       product_data: {
         name: productName,
-        description: "Point of sale subscription (3-month free trial)",
+        description: "Point of sale subscription billed in SAR (3-month free trial)",
       },
     },
   };

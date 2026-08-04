@@ -1,9 +1,10 @@
 import { prisma } from "./prisma.js";
+import { currencyFromCountry, planDisplayPayload } from "./fxGulf.js";
 
 /** First three months free (Stripe subscription trial). */
 export const TRIAL_DAYS = 90;
 
-/** Plan intervals offered at Stripe checkout (amounts in major currency units). */
+/** Plan intervals — amounts are always SAR (Stripe charge currency). */
 export const PLAN_INTERVALS = {
   month: {
     id: "month",
@@ -44,22 +45,38 @@ export const GULF_COUNTRIES = [
   "OM",
 ];
 
+/** NOT_SUBMITTED | PENDING_REVIEW | APPROVED | REJECTED */
+export function normalizeReviewStatus(raw) {
+  const s = String(raw || "NOT_SUBMITTED").toUpperCase();
+  if (["NOT_SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED"].includes(s)) return s;
+  return "NOT_SUBMITTED";
+}
+
 export function onboardingStatusFromOrg(org) {
   const profileDocsDone = Boolean(org?.profileDocsDone);
   const paymentDone = Boolean(org?.paymentDone);
+  const reviewStatus = normalizeReviewStatus(org?.onboardingReviewStatus);
   let nextStep = "COMPLETE";
   if (!profileDocsDone) nextStep = "PROFILE";
   else if (!paymentDone) nextStep = "PAYMENT";
+  else if (reviewStatus === "REJECTED") nextStep = "REJECTED";
+  else if (reviewStatus !== "APPROVED") nextStep = "REVIEW";
+  const complete =
+    profileDocsDone && paymentDone && reviewStatus === "APPROVED";
   return {
     profileDocsDone,
     paymentDone,
-    complete: profileDocsDone && paymentDone,
+    reviewStatus,
+    reviewNote: org?.onboardingReviewNote ?? null,
+    complete,
     nextStep,
   };
 }
 
 export function clientOnboardingPayload(org, documentTypes = []) {
   const status = onboardingStatusFromOrg(org);
+  const country = org.country || "SA";
+  const displayCurrency = currencyFromCountry(country);
   return {
     ...status,
     legalName: org.legalName ?? "",
@@ -82,12 +99,9 @@ export function clientOnboardingPayload(org, documentTypes = []) {
       uploaded: documentTypes.includes(docType),
       required: REQUIRED_DOC_TYPES.includes(docType),
     })),
-    plans: Object.values(PLAN_INTERVALS).map((p) => ({
-      id: p.id,
-      amount: p.amount,
-      interval: p.interval,
-      intervalCount: p.intervalCount,
-    })),
+    currencyCharge: "SAR",
+    currencyLocal: displayCurrency,
+    plans: Object.values(PLAN_INTERVALS).map((p) => planDisplayPayload(p, country)),
   };
 }
 

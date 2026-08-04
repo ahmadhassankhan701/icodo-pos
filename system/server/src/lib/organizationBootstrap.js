@@ -36,6 +36,7 @@ export async function bootstrapOrganization(prisma, input) {
       maxBranches: 3,
       profileDocsDone: Boolean(onboardingComplete),
       paymentDone: Boolean(onboardingComplete),
+      onboardingReviewStatus: onboardingComplete ? "APPROVED" : "NOT_SUBMITTED",
       ...(businessVertical != null ? { businessVertical } : {}),
     },
   });

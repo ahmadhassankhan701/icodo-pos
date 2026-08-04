@@ -66,6 +66,12 @@ model Organization {
   authorizedPersonName  String?
   termsAcceptedAt       DateTime?
 
+  /// Platform KYC review: NOT_SUBMITTED | PENDING_REVIEW | APPROVED | REJECTED
+  onboardingReviewStatus String    @default("NOT_SUBMITTED")
+  onboardingReviewedAt   DateTime?
+  onboardingReviewedBy   String?
+  onboardingReviewNote   String?
+
   /// Stripe billing
   stripeCustomerId     String?
   stripeSubscriptionId String?

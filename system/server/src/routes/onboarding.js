@@ -181,6 +181,10 @@ router.post(
             String(body.authorizedPersonName || ownerFullName).trim().slice(0, 200) || null,
           termsAcceptedAt: org.termsAcceptedAt || (acceptTerms ? new Date() : null),
           profileDocsDone: true,
+          onboardingReviewStatus: "PENDING_REVIEW",
+          onboardingReviewedAt: null,
+          onboardingReviewedBy: null,
+          onboardingReviewNote: null,
         },
       });
 

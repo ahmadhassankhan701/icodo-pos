@@ -30,6 +30,10 @@ router.get("/organizations", async (_req, res, next) => {
         businessVertical: true,
         plan: true,
         maxBranches: true,
+        country: true,
+        profileDocsDone: true,
+        paymentDone: true,
+        onboardingReviewStatus: true,
         createdAt: true,
         _count: { select: { users: true, branches: true } },
       },
@@ -468,6 +472,272 @@ router.delete("/users/:id", async (req, res, next) => {
     }
     await prisma.user.delete({ where: { id: target.id } });
     res.status(204).send();
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Dashboard analytics for platform console */
+router.get("/analytics", async (_req, res, next) => {
+  try {
+    const [
+      orgCount,
+      userCount,
+      pendingReviews,
+      approvedOrgs,
+      rejectedOrgs,
+      paymentAgg,
+      recentPurchases,
+      byCountry,
+      byPlan,
+    ] = await Promise.all([
+      prisma.organization.count(),
+      prisma.user.count(),
+      prisma.organization.count({ where: { onboardingReviewStatus: "PENDING_REVIEW" } }),
+      prisma.organization.count({ where: { onboardingReviewStatus: "APPROVED" } }),
+      prisma.organization.count({ where: { onboardingReviewStatus: "REJECTED" } }),
+      prisma.organizationPlanPurchase.aggregate({
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.organizationPlanPurchase.findMany({
+        orderBy: { purchasedAt: "desc" },
+        take: 8,
+        include: {
+          organization: { select: { id: true, name: true, country: true } },
+        },
+      }),
+      prisma.organization.groupBy({
+        by: ["country"],
+        _count: { _all: true },
+      }),
+      prisma.organization.groupBy({
+        by: ["plan"],
+        _count: { _all: true },
+      }),
+    ]);
+
+    res.json({
+      orgCount,
+      userCount,
+      pendingReviews,
+      approvedOrgs,
+      rejectedOrgs,
+      paymentsCount: paymentAgg._count || 0,
+      paymentsTotalSar: Number(paymentAgg._sum?.amount || 0),
+      currencyCharge: "SAR",
+      recentPurchases: recentPurchases.map((p) => ({
+        id: p.id,
+        organizationId: p.organizationId,
+        organizationName: p.organization?.name,
+        country: p.organization?.country,
+        plan: p.plan,
+        amount: p.amount != null ? Number(p.amount) : null,
+        currency: p.currency || "SAR",
+        reference: p.reference,
+        purchasedAt: p.purchasedAt,
+      })),
+      byCountry: byCountry.map((r) => ({
+        country: r.country || "—",
+        count: r._count._all,
+      })),
+      byPlan: byPlan.map((r) => ({
+        plan: r.plan || "FREE",
+        count: r._count._all,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Onboarding KYC queue */
+router.get("/onboarding-queue", async (req, res, next) => {
+  try {
+    const status = String(req.query.status || "PENDING_REVIEW").toUpperCase();
+    const where =
+      status === "ALL"
+        ? { profileDocsDone: true }
+        : { onboardingReviewStatus: status };
+
+    const rows = await prisma.organization.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        legalName: true,
+        country: true,
+        city: true,
+        businessVertical: true,
+        plan: true,
+        profileDocsDone: true,
+        paymentDone: true,
+        onboardingReviewStatus: true,
+        onboardingReviewNote: true,
+        onboardingReviewedAt: true,
+        selectedPlanInterval: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { users: true, onboardingDocuments: true } },
+      },
+    });
+    res.json(rows);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/organizations/:id/onboarding", async (req, res, next) => {
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: req.params.id },
+      include: {
+        onboardingDocuments: {
+          select: {
+            id: true,
+            docType: true,
+            fileName: true,
+            mimeType: true,
+            size: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        users: {
+          where: { role: "ADMIN" },
+          take: 5,
+          select: { id: true, email: true, name: true, createdAt: true },
+        },
+        planPurchases: {
+          orderBy: { purchasedAt: "desc" },
+          take: 10,
+        },
+        taxSettings: true,
+      },
+    });
+    if (!org) return res.status(404).json({ error: "Organization not found" });
+    res.json({
+      organization: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        legalName: org.legalName,
+        country: org.country,
+        city: org.city,
+        addressText: org.addressText,
+        crNumber: org.crNumber,
+        licenseNumber: org.licenseNumber,
+        ownerFullName: org.ownerFullName,
+        ownerIdNumber: org.ownerIdNumber,
+        ownerPhone: org.ownerPhone,
+        vatNumber: org.vatNumber,
+        taxNumber: org.taxNumber,
+        iban: org.iban,
+        authorizedPersonName: org.authorizedPersonName,
+        businessVertical: org.businessVertical,
+        plan: org.plan,
+        profileDocsDone: org.profileDocsDone,
+        paymentDone: org.paymentDone,
+        onboardingReviewStatus: org.onboardingReviewStatus,
+        onboardingReviewNote: org.onboardingReviewNote,
+        onboardingReviewedAt: org.onboardingReviewedAt,
+        onboardingReviewedBy: org.onboardingReviewedBy,
+        selectedPlanInterval: org.selectedPlanInterval,
+        stripeCustomerId: org.stripeCustomerId,
+        stripeSubscriptionId: org.stripeSubscriptionId,
+        termsAcceptedAt: org.termsAcceptedAt,
+        createdAt: org.createdAt,
+        updatedAt: org.updatedAt,
+      },
+      documents: org.onboardingDocuments,
+      admins: org.users,
+      purchases: org.planPurchases,
+      taxSettings: org.taxSettings,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/organizations/:id/documents/:docType", async (req, res, next) => {
+  try {
+    const docType = String(req.params.docType || "").toUpperCase();
+    const doc = await prisma.organizationDocument.findUnique({
+      where: {
+        organizationId_docType: {
+          organizationId: req.params.id,
+          docType,
+        },
+      },
+    });
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    res.setHeader("Content-Type", doc.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(doc.fileName)}"`
+    );
+    res.send(Buffer.from(doc.data));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/organizations/:id/onboarding/approve", async (req, res, next) => {
+  try {
+    const note = req.body?.note != null ? String(req.body.note).trim().slice(0, 500) : null;
+    const org = await prisma.organization.findUnique({ where: { id: req.params.id } });
+    if (!org) return res.status(404).json({ error: "Organization not found" });
+    if (!org.profileDocsDone) {
+      return res.status(400).json({ error: "Organization has not submitted documents yet" });
+    }
+    const updated = await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        onboardingReviewStatus: "APPROVED",
+        onboardingReviewedAt: new Date(),
+        onboardingReviewedBy: req.user.sub,
+        onboardingReviewNote: note,
+      },
+    });
+    res.json({
+      id: updated.id,
+      onboardingReviewStatus: updated.onboardingReviewStatus,
+      onboardingReviewedAt: updated.onboardingReviewedAt,
+      onboardingReviewNote: updated.onboardingReviewNote,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/organizations/:id/onboarding/reject", async (req, res, next) => {
+  try {
+    const note = String(req.body?.note || "").trim();
+    if (note.length < 3) {
+      return res.status(400).json({ error: "Rejection note is required (min 3 characters)" });
+    }
+    const org = await prisma.organization.findUnique({ where: { id: req.params.id } });
+    if (!org) return res.status(404).json({ error: "Organization not found" });
+    const updated = await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        onboardingReviewStatus: "REJECTED",
+        onboardingReviewedAt: new Date(),
+        onboardingReviewedBy: req.user.sub,
+        onboardingReviewNote: note.slice(0, 500),
+        // Allow resubmitting profile/docs
+        profileDocsDone: false,
+      },
+    });
+    res.json({
+      id: updated.id,
+      onboardingReviewStatus: updated.onboardingReviewStatus,
+      onboardingReviewedAt: updated.onboardingReviewedAt,
+      onboardingReviewNote: updated.onboardingReviewNote,
+    });
   } catch (e) {
     next(e);
   }

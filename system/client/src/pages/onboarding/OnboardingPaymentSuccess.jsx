@@ -4,6 +4,7 @@ import { api } from "../../api/client.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { OnboardingShell } from "./OnboardingShell.jsx";
+import { getPostAuthPath } from "../../lib/onboardingPath.js";
 
 export default function OnboardingPaymentSuccess() {
   const { user, loading, refreshUser } = useAuth();
@@ -24,7 +25,7 @@ export default function OnboardingPaymentSuccess() {
       body: { sessionId },
     })
       .then(() => refreshUser())
-      .then(() => nav("/dashboard", { replace: true }))
+      .then((u) => nav(getPostAuthPath(u) || "/dashboard", { replace: true }))
       .catch((e) => setErr(e.message || t("onboarding.paymentFailed")));
   }, [user, loading, params, refreshUser, nav, t]);
 
