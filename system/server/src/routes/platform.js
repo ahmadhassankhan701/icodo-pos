@@ -702,11 +702,33 @@ router.post("/organizations/:id/onboarding/approve", async (req, res, next) => {
         onboardingReviewNote: note,
       },
     });
+
+    const adminUser = await prisma.user.findFirst({
+      where: { organizationId: org.id, role: "ADMIN" },
+      orderBy: { createdAt: "asc" },
+      select: { email: true },
+    });
+    let notify = null;
+    try {
+      const { notifyOnboardingDecision } = await import("../lib/onboardingNotify.js");
+      notify = await notifyOnboardingDecision({
+        org: updated,
+        event: "approved",
+        note,
+        adminEmail: adminUser?.email || null,
+        actorUserId: req.user.sub,
+      });
+    } catch (e) {
+      console.warn("[platform/approve] notify failed", e?.message || e);
+      notify = { error: e?.message || String(e) };
+    }
+
     res.json({
       id: updated.id,
       onboardingReviewStatus: updated.onboardingReviewStatus,
       onboardingReviewedAt: updated.onboardingReviewedAt,
       onboardingReviewNote: updated.onboardingReviewNote,
+      notify,
     });
   } catch (e) {
     next(e);
@@ -721,6 +743,13 @@ router.post("/organizations/:id/onboarding/reject", async (req, res, next) => {
     }
     const org = await prisma.organization.findUnique({ where: { id: req.params.id } });
     if (!org) return res.status(404).json({ error: "Organization not found" });
+
+    const adminUser = await prisma.user.findFirst({
+      where: { organizationId: org.id, role: "ADMIN" },
+      orderBy: { createdAt: "asc" },
+      select: { email: true },
+    });
+
     const updated = await prisma.organization.update({
       where: { id: org.id },
       data: {
@@ -732,11 +761,28 @@ router.post("/organizations/:id/onboarding/reject", async (req, res, next) => {
         profileDocsDone: false,
       },
     });
+
+    let notify = null;
+    try {
+      const { notifyOnboardingDecision } = await import("../lib/onboardingNotify.js");
+      notify = await notifyOnboardingDecision({
+        org: { ...updated, ownerPhone: org.ownerPhone, ownerFullName: org.ownerFullName },
+        event: "rejected",
+        note: note.slice(0, 500),
+        adminEmail: adminUser?.email || null,
+        actorUserId: req.user.sub,
+      });
+    } catch (e) {
+      console.warn("[platform/reject] notify failed", e?.message || e);
+      notify = { error: e?.message || String(e) };
+    }
+
     res.json({
       id: updated.id,
       onboardingReviewStatus: updated.onboardingReviewStatus,
       onboardingReviewedAt: updated.onboardingReviewedAt,
       onboardingReviewNote: updated.onboardingReviewNote,
+      notify,
     });
   } catch (e) {
     next(e);

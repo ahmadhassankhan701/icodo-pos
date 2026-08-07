@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useMarketingCopy } from "./copy.js";
 import { IcodoNavBrand, IcodoLogo } from "./IcodoLogo.jsx";
+import { LanguageSwitcher } from "../components/LanguageSwitcher.jsx";
 import "./marketing.css";
 
 /** Shared chrome for Sign in / Sign up — same shell width as marketing pages */
 export function AuthShell({ title, subtitle, children }) {
-  const { locale, setLocale } = useI18n();
+  const { locale } = useI18n();
   const c = useMarketingCopy(locale);
 
   return (
@@ -18,14 +19,7 @@ export function AuthShell({ title, subtitle, children }) {
             <IcodoNavBrand posLabel={c.brandProduct} />
           </Link>
           <div className="mkt-nav-actions">
-            <button
-              type="button"
-              className="mkt-btn mkt-btn-ghost"
-              style={{ minHeight: "2.5rem", padding: "0.4rem 0.75rem" }}
-              onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-            >
-              {locale === "ar" ? "EN" : "ع"}
-            </button>
+            <LanguageSwitcher variant="compact" className="mkt-lang-switch" />
             <Link to="/" className="mkt-btn mkt-btn-ghost" style={{ minHeight: "2.5rem" }}>
               {c.auth.backHome}
             </Link>

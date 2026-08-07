@@ -21,12 +21,11 @@ export const BUSINESS_VERTICAL_IDS = [
 /**
  * Verticals ready for public signup right now.
  * Others stay in the enum for existing orgs / later unlocks, but are disabled in signup UI.
- * Current sellable set: grocery (lots/FEFO), pharmacy (lots + appointments), café (modifiers/table).
+ * Current sellable set: grocery (lots/FEFO + waste) and general retail (smart reorder).
  */
 export const MVP_ENABLED_VERTICAL_IDS = [
   "GROCERY",
-  "PHARMACY",
-  "CAFE",
+  "RETAIL_GENERAL",
 ];
 
 export const MVP_COMING_SOON_VERTICAL_IDS = BUSINESS_VERTICAL_IDS.filter(

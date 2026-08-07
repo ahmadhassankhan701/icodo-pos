@@ -26,6 +26,7 @@ import {
   ensureLotsCoverQuantity,
 } from "../lib/inventoryLots.js";
 import { getOrCreateTaxSettings, resolveSaleTaxPercent } from "../lib/taxPacks.js";
+import { assessCheckoutRisk } from "../lib/cashierCopilot.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -98,6 +99,7 @@ router.post("/checkout", async (req, res) => {
     guestPhone: guestPhoneRaw,
     tableNumber: tableNumberRaw,
     orderNote: orderNoteRaw,
+    discountReason: discountReasonRaw,
   } = req.body || {};
   const rawCh =
     saleChannelRaw != null && String(saleChannelRaw).trim()
@@ -183,10 +185,15 @@ router.post("/checkout", async (req, res) => {
       tableNumberRaw != null && String(tableNumberRaw).trim()
         ? String(tableNumberRaw).trim().slice(0, 40)
         : null;
-    const orderNote =
+    const orderNoteBase =
       orderNoteRaw != null && String(orderNoteRaw).trim()
         ? String(orderNoteRaw).trim().slice(0, 500)
         : null;
+    const discountReason =
+      discountReasonRaw != null && String(discountReasonRaw).trim()
+        ? String(discountReasonRaw).trim().slice(0, 200)
+        : null;
+    let orderNote = orderNoteBase;
 
     let total = new Prisma.Decimal(0);
     const lineData = [];
@@ -231,6 +238,25 @@ router.post("/checkout", async (req, res) => {
       const applied = Math.min(d, cap);
       discountDec = new Prisma.Decimal(applied.toFixed(2));
     }
+
+    const checkoutRisk = assessCheckoutRisk({
+      subtotal: Number(subtotalDec),
+      discountAmount: Number(discountDec),
+      itemCount: lineData.length,
+      hasDiscountReason: Boolean(discountReason),
+    });
+    if (!checkoutRisk.canProceed) {
+      throw new Error(
+        checkoutRisk.requireDiscountReason
+          ? "يلزم إدخال سبب للخصم الكبير"
+          : "الخصم غير صالح",
+      );
+    }
+    if (discountReason && Number(discountDec) > 0) {
+      const tag = `Discount reason: ${discountReason}`;
+      orderNote = orderNote ? `${orderNote} · ${tag}`.slice(0, 500) : tag;
+    }
+
     const afterManualDec = subtotalDec.sub(discountDec);
     const afterManualNum = roundMoney(Number(afterManualDec.toString()));
 

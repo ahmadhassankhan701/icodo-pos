@@ -44,6 +44,12 @@ import LoyaltyCoupons from "./pages/LoyaltyCoupons.jsx";
 import Plan from "./pages/Plan.jsx";
 import SalesHistory from "./pages/SalesHistory.jsx";
 import InventoryLots from "./pages/InventoryLots.jsx";
+import StockBrain from "./pages/StockBrain.jsx";
+import PricingBrain from "./pages/PricingBrain.jsx";
+import CommandCenter from "./pages/CommandCenter.jsx";
+import CostBrain from "./pages/CostBrain.jsx";
+import StockBalancer from "./pages/StockBalancer.jsx";
+import CustomersBrain from "./pages/CustomersBrain.jsx";
 const loadReports = () => import("./pages/Reports.jsx");
 const loadAppointments = () => import("./pages/Appointments.jsx");
 const loadAccounting = () => import("./pages/Accounting.jsx");
@@ -369,6 +375,66 @@ export default function App() {
               <Protected permission="productsView">
                 <VerticalFeatureGate feature="lotsExpiry">
                   <InventoryLots />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
+            path="/stock-brain"
+            element={
+              <Protected roles={["ADMIN", "MANAGER", "CASHIER"]} permission="purchases">
+                <VerticalFeatureGate feature="stockBrain">
+                  <StockBrain />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
+            path="/pricing-brain"
+            element={
+              <Protected roles={["ADMIN", "MANAGER"]} permission="productsEdit">
+                <VerticalFeatureGate feature="priceBrain">
+                  <PricingBrain />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
+            path="/command-center"
+            element={
+              <Protected roles={["ADMIN", "MANAGER"]}>
+                <VerticalFeatureGate feature="ownerBrief">
+                  <CommandCenter />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
+            path="/cost-brain"
+            element={
+              <Protected roles={["ADMIN", "MANAGER"]} permission="purchases">
+                <VerticalFeatureGate feature="costBrain">
+                  <CostBrain />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
+            path="/stock-balancer"
+            element={
+              <Protected roles={["ADMIN", "MANAGER"]} permission="transfer">
+                <VerticalFeatureGate feature="stockBalancer">
+                  <StockBalancer />
+                </VerticalFeatureGate>
+              </Protected>
+            }
+          />
+          <Route
+            path="/customers-brain"
+            element={
+              <Protected roles={["ADMIN", "MANAGER"]} permission="customers">
+                <VerticalFeatureGate feature="customerRfm">
+                  <CustomersBrain />
                 </VerticalFeatureGate>
               </Protected>
             }

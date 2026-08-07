@@ -5,6 +5,8 @@ import { findBranchInOrg } from "../lib/orgScope.js";
 import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
+import { assessRefundRisk } from "../lib/cashierCopilot.js";
+import { sendError } from "../lib/apiError.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -170,6 +172,20 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
         subtotal,
         saleLots: saleItemsByProduct?.get(productId)?.lotUsages || [],
       });
+    }
+
+    const refundRisk = assessRefundRisk({
+      totalAmount: Number(total),
+      note,
+    });
+    if (!refundRisk.canProceed) {
+      return sendError(
+        res,
+        400,
+        "يلزم إدخال سبب للإرجاع عالي القيمة",
+        "A note/reason is required for high-value refunds",
+        { code: "REFUND_NOTE_REQUIRED", risk: refundRisk },
+      );
     }
 
     const refund = await prisma.$transaction(async (tx) => {

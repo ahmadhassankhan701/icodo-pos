@@ -37,14 +37,14 @@ const CUSTOMER_ACCOUNTS_EXCLUDED = new Set([
   "FITNESS",
 ]);
 
-/** أنشطة تعتمد دفعات الصلاحية (صيدلية / بقالة) */
-const LOTS_EXPIRY_VERTICALS = new Set(["PHARMACY", "GROCERY"]);
+/** أنشطة تعتمد دفعات الصلاحية (بقالة + تجزئة عامة إن وُجدت دفعات) */
+const LOTS_EXPIRY_VERTICALS = new Set(["GROCERY", "RETAIL_GENERAL", "PHARMACY"]);
 
 /** كافيه / مطعم — طاولة وملاحظات وإضافات بسيطة */
 const CAFE_POS_VERTICALS = new Set(["CAFE", "RESTAURANT"]);
 
 /**
- * @param {'wholesale' | 'appointments' | 'customerAccounts' | 'petPosFilters' | 'lotsExpiry' | 'cafePosExtras'} feature
+ * @param {'wholesale' | 'appointments' | 'customerAccounts' | 'petPosFilters' | 'lotsExpiry' | 'cafePosExtras' | 'stockBrain' | 'priceBrain' | 'cashierCopilot' | 'ownerBrief' | 'costBrain' | 'stockBalancer' | 'customerRfm'} feature
  * @param {string | null | undefined} businessVertical
  */
 export function isVerticalFeatureEnabled(feature, businessVertical) {
@@ -65,6 +65,14 @@ export function isVerticalFeatureEnabled(feature, businessVertical) {
       return LOTS_EXPIRY_VERTICALS.has(v);
     case "cafePosExtras":
       return CAFE_POS_VERTICALS.has(v);
+    case "stockBrain":
+    case "priceBrain":
+    case "cashierCopilot":
+    case "ownerBrief":
+    case "costBrain":
+    case "stockBalancer":
+    case "customerRfm":
+      return v === "GROCERY" || v === "RETAIL_GENERAL";
     default:
       return true;
   }

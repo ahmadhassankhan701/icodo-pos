@@ -11,6 +11,7 @@ import {
   moveLotsBetweenBranches,
   syncLotsToTargetQuantity,
 } from "../lib/inventoryLots.js";
+import { executeInventoryTransfer } from "../lib/inventoryTransfer.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -309,12 +310,6 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePerm
   const { fromBranchId, toBranchId, items } = req.body || {};
   const from = String(fromBranchId || "");
   const to = String(toBranchId || "");
-  if (!from || !to || from === to) {
-    return res.status(400).json({ error: "فرع المصدر والوجهة غير صالحين" });
-  }
-  if (!Array.isArray(items) || !items.length) {
-    return res.status(400).json({ error: "لا توجد بنود" });
-  }
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== from) {
     return res.status(403).json({ error: "لا يمكن التحويل من فرع آخر" });
   }
@@ -323,88 +318,23 @@ router.post("/transfer", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePerm
   const bTo = await findBranchInOrg(prisma, orgId, to);
   if (!bFrom || !bTo) return res.status(400).json({ error: "فرع غير صالح" });
 
-  // Aggregate duplicate product lines so validation matches the actual move.
-  const byProduct = new Map();
-  for (const line of items) {
-    const productId = String(line.productId || "");
-    if (!productId) continue;
-    const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
-    byProduct.set(productId, (byProduct.get(productId) || 0) + qty);
-  }
-  const prep = [...byProduct.entries()].map(([productId, qty]) => ({ productId, qty }));
-  if (!prep.length) {
-    return res.status(400).json({ error: "لا توجد بنود" });
-  }
-
   try {
-    for (const { productId, qty } of prep) {
-      const pr = await prisma.product.findFirst({
-        where: { id: productId, organizationId: orgId },
-      });
-      if (!pr) {
-        return res.status(400).json({ error: `منتج غير موجود: ${productId}` });
-      }
-      const src = await prisma.inventory.findUnique({
-        where: { productId_branchId: { productId, branchId: from } },
-      });
-      if (!src || src.quantity < qty) {
-        return res.status(400).json({ error: `كمية غير كافية: ${pr.name}` });
-      }
-    }
-
-    await prisma.$transaction(async (tx) => {
-      for (const { productId, qty } of prep) {
-        const src = await tx.inventory.findUnique({
-          where: { productId_branchId: { productId, branchId: from } },
-        });
-        if (!src || src.quantity < qty) {
-          const p = await tx.product.findFirst({ where: { id: productId } });
-          throw new Error(`كمية غير كافية: ${p?.name || productId}`);
-        }
-        await tx.inventory.update({
-          where: { productId_branchId: { productId, branchId: from } },
-          data: { quantity: { decrement: qty } },
-        });
-        await tx.inventory.upsert({
-          where: { productId_branchId: { productId, branchId: to } },
-          create: {
-            productId,
-            branchId: to,
-            quantity: qty,
-            minStockLevel: 5,
-          },
-          update: { quantity: { increment: qty } },
-        });
-        await moveLotsBetweenBranches(tx, {
-          orgId,
-          fromBranchId: from,
-          toBranchId: to,
-          productId,
-          quantity: qty,
-        });
-      }
-    });
-
-    await writeAudit({
+    const result = await executeInventoryTransfer({
+      orgId,
       userId: req.user.sub,
-      action: "INVENTORY_TRANSFER",
-      entityType: "Branch",
-      entityId: `${from}->${to}`,
-      branchId: from,
-      summary: `Transfer ${prep.length} products to branch ${to}`,
+      fromBranchId: from,
+      toBranchId: to,
+      items: Array.isArray(items) ? items : [],
     });
-    scheduleInventoryWebhook(orgId, {
-      event: "inventory.transfer",
-      meta: { fromBranchId: from, toBranchId: to, lineCount: prep.length },
-      lines: prep.flatMap(({ productId, qty }) => [
-        { branchId: from, productId, quantityDelta: -qty },
-        { branchId: to, productId, quantityDelta: qty },
-      ]),
-    });
-    res.json({ ok: true });
+    res.json(result);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "فشل التحويل";
-    res.status(400).json({ error: msg });
+    const status = e?.status || 400;
+    const msg = e?.errorAr || (e instanceof Error ? e.message : "فشل التحويل");
+    res.status(status).json({
+      error: msg,
+      errorAr: e?.errorAr || msg,
+      errorEn: e?.errorEn || msg,
+    });
   }
 });
 

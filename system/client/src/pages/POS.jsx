@@ -34,6 +34,8 @@ import { productDisplayName } from "../utils/productName.js";
 import { ProductImagePreview } from "../components/ProductImagePreview.jsx";
 import { isVerticalFeatureEnabled } from "../lib/verticalFeatures.js";
 import { useOrgCurrency } from "../lib/orgCurrency.js";
+import { CashierCopilotPanel } from "../components/CashierCopilotPanel.jsx";
+import { assessDiscountRiskLocal, suggestProductsLocal } from "../lib/copilotFuzzy.js";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -88,10 +90,15 @@ export default function POS() {
   const [orderNote, setOrderNote] = useState("");
   const [modifierProduct, setModifierProduct] = useState(null);
   const [modifierKeys, setModifierKeys] = useState([]);
+  const [barcodeMiss, setBarcodeMiss] = useState("");
+  const [barcodeSuggestions, setBarcodeSuggestions] = useState([]);
+  const [upsellTips, setUpsellTips] = useState([]);
+  const [discountReason, setDiscountReason] = useState("");
   const searchWrapRef = useRef(null);
   const searchInputRef = useRef(null);
 
   const showCafeExtras = isVerticalFeatureEnabled("cafePosExtras", user?.businessVertical);
+  const showCopilot = isVerticalFeatureEnabled("cashierCopilot", user?.businessVertical);
 
   const items = useCartStore((s) => s.items);
   const useWholesalePricing = useCartStore((s) => s.useWholesalePricing);
@@ -391,16 +398,112 @@ export default function POS() {
     return () => clearInterval(id);
   }, [softRefreshCatalog]);
 
+  const discountRisk = useMemo(() => {
+    if (!showCopilot || discountNum <= 0) return null;
+    return assessDiscountRiskLocal(cartSubtotal, discountNum, Boolean(discountReason.trim()));
+  }, [showCopilot, discountNum, cartSubtotal, discountReason]);
+
   const onScan = useCallback(
     (code) => {
       const p = products.find((x) => x.barcode === code || x.sku === code);
-      if (p) pickSearchProduct(p);
-      else setMsg(t("pos.barcodeMiss", { code }));
+      if (p) {
+        setBarcodeMiss("");
+        setBarcodeSuggestions([]);
+        pickSearchProduct(p);
+        return;
+      }
+      if (!showCopilot) {
+        setMsg(t("pos.barcodeMiss", { code }));
+        return;
+      }
+      setBarcodeMiss(code);
+      setMsg(t("pos.barcodeMiss", { code }));
+      const local = suggestProductsLocal(code, products, 5);
+      setBarcodeSuggestions(local);
+      if (branchId && typeof navigator !== "undefined" && navigator.onLine) {
+        api(
+          `/api/intelligence/cashier/barcode-suggest?branchId=${encodeURIComponent(branchId)}&code=${encodeURIComponent(code)}`,
+        )
+          .then((res) => {
+            const rows = Array.isArray(res?.suggestions) ? res.suggestions : [];
+            if (!rows.length) return;
+            const mapped = rows.map((s) => ({
+              id: s.productId,
+              name: s.name,
+              nameEn: s.nameEn,
+              sku: s.sku,
+              barcode: s.barcode,
+              price: s.price,
+              wholesalePrice: s.wholesalePrice,
+              cost: s.cost,
+              stock: s.stock,
+              imageUrl: s.imageUrl,
+              modifiers: s.modifiers,
+              isActive: true,
+            }));
+            setBarcodeSuggestions(mapped);
+          })
+          .catch(() => {});
+      }
     },
-    [products, pickSearchProduct, t]
+    [products, pickSearchProduct, t, showCopilot, branchId],
   );
 
   useBarcodeScanner(onScan, true);
+
+  useEffect(() => {
+    if (!showCopilot || !branchId || !items.length) {
+      setUpsellTips([]);
+      return;
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setUpsellTips([]);
+      return;
+    }
+    const ids = [...new Set(items.map((i) => i.productId).filter(Boolean))];
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api("/api/intelligence/cashier/upsell", {
+        method: "POST",
+        body: { branchId, productIds: ids, limit: 5 },
+      })
+        .then((res) => {
+          if (cancelled) return;
+          setUpsellTips(Array.isArray(res?.tips) ? res.tips.slice(0, 5) : []);
+        })
+        .catch(() => {
+          if (!cancelled) setUpsellTips([]);
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [showCopilot, branchId, items]);
+
+  const pickCopilotProduct = useCallback(
+    (p) => {
+      if (!p) return;
+      setBarcodeMiss("");
+      setBarcodeSuggestions([]);
+      setMsg("");
+      pickSearchProduct(p.product || p);
+    },
+    [pickSearchProduct],
+  );
+
+  const addUpsellTip = useCallback(
+    (tip) => {
+      if (!tip) return;
+      if (tip.product) pickSearchProduct(tip.product);
+      else {
+        const p = products.find((x) => x.id === tip.productId);
+        if (p) pickSearchProduct(p);
+      }
+      setMsg(t("copilot.upsellAdded", { name: productDisplayName(tip, locale) }));
+    },
+    [pickSearchProduct, products, t, locale],
+  );
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId),
@@ -534,6 +637,11 @@ export default function POS() {
     if (!items.length) return;
     const bid = branchId;
 
+    if (showCopilot && discountRisk && !discountRisk.canProceed) {
+      setMsg(t("copilot.discountReasonNeeded", { pct: String(discountRisk.pct) }));
+      return;
+    }
+
     const tenderNeedsCashSession = (() => {
       if (splitEnabled) {
         return splitRows.some(
@@ -615,6 +723,9 @@ export default function POS() {
       if (tableNumber.trim()) body.tableNumber = tableNumber.trim();
       if (orderNote.trim()) body.orderNote = orderNote.trim();
     }
+    if (showCopilot && discountNum > 0 && discountReason.trim()) {
+      body.discountReason = discountReason.trim();
+    }
     const cTrim = couponInput.trim();
     if (cTrim) body.couponCode = cTrim;
     const lp = Math.max(0, Math.floor(Number.parseFloat(String(loyaltyPointsInput).replace(",", ".")) || 0));
@@ -676,6 +787,10 @@ export default function POS() {
         clearCart();
         setCustomerId("");
         setDiscountInput("");
+        setDiscountReason("");
+        setBarcodeMiss("");
+        setBarcodeSuggestions([]);
+        setUpsellTips([]);
         setTaxPercent("0");
         setTableNumber("");
         setOrderNote("");
@@ -708,6 +823,10 @@ export default function POS() {
       clearCart();
       setCustomerId("");
       setDiscountInput("");
+      setDiscountReason("");
+      setBarcodeMiss("");
+      setBarcodeSuggestions([]);
+      setUpsellTips([]);
       setTaxPercent("0");
       setTableNumber("");
       setOrderNote("");
@@ -902,6 +1021,18 @@ export default function POS() {
           />
         </div>
         <div className="pos-checkout-column">
+          {showCopilot ? (
+            <CashierCopilotPanel
+              barcodeMiss={barcodeMiss}
+              barcodeSuggestions={barcodeSuggestions}
+              onPickSuggestion={pickCopilotProduct}
+              upsellTips={upsellTips}
+              onAddUpsell={addUpsellTip}
+              risk={discountRisk}
+              discountReason={discountReason}
+              onDiscountReasonChange={setDiscountReason}
+            />
+          ) : null}
           <div className="pos-column-scroll">
           <div className="card">
             <div style={{ fontWeight: 800, marginBottom: 8 }}>{t("pos.heldList")}</div>

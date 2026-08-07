@@ -20,6 +20,13 @@ import customerRoutes from "./routes/customers.js";
 import refundRoutes from "./routes/refunds.js";
 import supplierRoutes from "./routes/suppliers.js";
 import purchaseRoutes from "./routes/purchases.js";
+import intelligenceRoutes from "./routes/intelligence.js";
+import pricingIntelligenceRoutes from "./routes/pricingIntelligence.js";
+import cashierIntelligenceRoutes from "./routes/cashierIntelligence.js";
+import ownerBriefRoutes from "./routes/ownerBrief.js";
+import costIntelligenceRoutes from "./routes/costIntelligence.js";
+import stockBalancerRoutes from "./routes/stockBalancer.js";
+import customerRfmRoutes from "./routes/customerRfm.js";
 import cashSessionRoutes from "./routes/cashSessions.js";
 import auditRoutes from "./routes/audit.js";
 import heldCartRoutes from "./routes/heldCarts.js";
@@ -129,6 +136,13 @@ app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/refunds", refundRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
+app.use("/api/intelligence", intelligenceRoutes);
+app.use("/api/intelligence/pricing", pricingIntelligenceRoutes);
+app.use("/api/intelligence/cashier", cashierIntelligenceRoutes);
+app.use("/api/intelligence/brief", ownerBriefRoutes);
+app.use("/api/intelligence/cost", costIntelligenceRoutes);
+app.use("/api/intelligence/balancer", stockBalancerRoutes);
+app.use("/api/intelligence/customers", customerRfmRoutes);
 app.use("/api/cash-sessions", cashSessionRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/held-carts", heldCartRoutes);
@@ -145,21 +159,49 @@ app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
     return res.status(400).json({
       error: "تعذر قراءة الطلب (JSON غير صالح أو تالف)",
+      errorAr: "تعذر قراءة الطلب (JSON غير صالح أو تالف)",
+      errorEn: "Could not parse request (invalid JSON)",
+    });
+  }
+  if (err?.errorAr || err?.errorEn) {
+    const status = Number(err.status) || 400;
+    return res.status(status).json({
+      error: err.errorAr || err.message,
+      errorAr: err.errorAr || err.message,
+      errorEn: err.errorEn || err.message,
+      ...(err.code ? { code: err.code } : {}),
+    });
+  }
+  if (err?.status && Number(err.status) >= 400 && Number(err.status) < 500) {
+    return res.status(Number(err.status)).json({
+      error: err.message || "طلب غير صالح",
+      errorAr: err.message || "طلب غير صالح",
+      errorEn: err.message || "Bad request",
     });
   }
   if (isDbUnavailableError(err)) {
     console.error("[db]", err.message);
-    return res.status(503).json({ error: dbUnavailableMessage });
+    return res.status(503).json({
+      error: dbUnavailableMessage,
+      errorAr: dbUnavailableMessage,
+      errorEn: "Database unavailable. Please try again shortly.",
+    });
   }
   if (isSchemaDriftError(err)) {
     console.error("[schema]", err.code, err.meta ?? "");
     return res.status(503).json({
       error: schemaDriftMessage,
+      errorAr: schemaDriftMessage,
+      errorEn: "Database schema needs migration. Contact support.",
       prismaCode: err.code,
     });
   }
   console.error(err);
-  res.status(500).json({ error: "خطأ في الخادم" });
+  res.status(500).json({
+    error: "خطأ في الخادم",
+    errorAr: "خطأ في الخادم",
+    errorEn: "Server error",
+  });
 });
 
 export default app;

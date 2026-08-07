@@ -16,9 +16,10 @@ export function getPostAuthPath(user) {
   if (user.role !== "ADMIN") return "/onboarding/pending";
 
   const onboarding = user.onboarding || {};
+  // Rejected orgs must see the reason + resubmit CTA even when profileDocsDone was reset.
+  if (onboarding.reviewStatus === "REJECTED") return "/onboarding/rejected";
   if (!onboarding.profileDocsDone) return "/onboarding/profile";
   if (!onboarding.paymentDone) return "/onboarding/payment";
-  if (onboarding.reviewStatus === "REJECTED") return "/onboarding/rejected";
   return "/onboarding/review";
 }
 

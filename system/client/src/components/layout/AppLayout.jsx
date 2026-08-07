@@ -9,6 +9,8 @@ import { OfflineBanner } from "../OfflineBanner.jsx";
 import { useAlertsBadgeCount } from "../../hooks/useAlertsBadgeCount.js";
 import { isVerticalFeatureEnabled } from "../../lib/verticalFeatures.js";
 import { SidebarIcon } from "../SidebarIcon.jsx";
+import { LanguageSwitcher } from "../LanguageSwitcher.jsx";
+import { FloatingCalculator } from "../FloatingCalculator.jsx";
 
 const NAV_SECTION_IDS = ["dashboard", "inventory", "customers", "business", "admin"];
 
@@ -17,6 +19,7 @@ function navSectionForPath(pathname) {
   const p = pathname || "";
   if (
     p.startsWith("/dashboard") ||
+    p.startsWith("/command-center") ||
     p.startsWith("/alerts") ||
     p.startsWith("/sync-queue") ||
     p.startsWith("/reports") ||
@@ -27,6 +30,10 @@ function navSectionForPath(pathname) {
   if (
     p.startsWith("/products") ||
     p.startsWith("/inventory-lots") ||
+    p.startsWith("/stock-brain") ||
+    p.startsWith("/pricing-brain") ||
+    p.startsWith("/cost-brain") ||
+    p.startsWith("/stock-balancer") ||
     p.startsWith("/categories") ||
     p.startsWith("/cash") ||
     p.startsWith("/purchases") ||
@@ -38,6 +45,7 @@ function navSectionForPath(pathname) {
   }
   if (
     p.startsWith("/customers") ||
+    p.startsWith("/customers-brain") ||
     p.startsWith("/customer-accounts") ||
     p.startsWith("/loyalty") ||
     p.startsWith("/appointments")
@@ -219,6 +227,13 @@ export function AppLayout() {
               <SidebarIcon name="analytics" />
               <span>{t("nav.analytics")}</span>
             </NavLink>
+            {(isAdmin || isManager) &&
+            isVerticalFeatureEnabled("ownerBrief", bv) ? (
+              <NavLink to="/command-center" className={sidebarLinkClass}>
+                <SidebarIcon name="spark" />
+                <span>{t("nav.commandCenter")}</span>
+              </NavLink>
+            ) : null}
             {can("reports") ? (
               <NavLink to="/reports" className={sidebarLinkClass}>
                 <SidebarIcon name="reports" />
@@ -287,6 +302,36 @@ export function AppLayout() {
                 <span>{t("nav.purchases")}</span>
               </NavLink>
             ) : null}
+            {can("purchases") && isVerticalFeatureEnabled("stockBrain", bv) ? (
+              <NavLink to="/stock-brain" className={sidebarLinkClass}>
+                <SidebarIcon name="inventory" />
+                <span>{t("nav.stockBrain")}</span>
+              </NavLink>
+            ) : null}
+            {(isAdmin || isManager) &&
+            can("productsEdit") &&
+            isVerticalFeatureEnabled("priceBrain", bv) ? (
+              <NavLink to="/pricing-brain" className={sidebarLinkClass}>
+                <SidebarIcon name="coupons" />
+                <span>{t("nav.priceBrain")}</span>
+              </NavLink>
+            ) : null}
+            {(isAdmin || isManager) &&
+            can("purchases") &&
+            isVerticalFeatureEnabled("costBrain", bv) ? (
+              <NavLink to="/cost-brain" className={sidebarLinkClass}>
+                <SidebarIcon name="purchases" />
+                <span>{t("nav.costBrain")}</span>
+              </NavLink>
+            ) : null}
+            {(isAdmin || isManager) &&
+            can("transfer") &&
+            isVerticalFeatureEnabled("stockBalancer", bv) ? (
+              <NavLink to="/stock-balancer" className={sidebarLinkClass}>
+                <SidebarIcon name="transfer" />
+                <span>{t("nav.stockBalancer")}</span>
+              </NavLink>
+            ) : null}
             {can("transfer") ? (
               <NavLink to="/transfer" className={sidebarLinkClass}>
                 <SidebarIcon name="transfer" />
@@ -325,6 +370,14 @@ export function AppLayout() {
               <NavLink to="/customers" className={sidebarLinkClass}>
                 <SidebarIcon name="customers" />
                 <span>{t("nav.customers")}</span>
+              </NavLink>
+            ) : null}
+            {(isAdmin || isManager) &&
+            can("customers") &&
+            isVerticalFeatureEnabled("customerRfm", bv) ? (
+              <NavLink to="/customers-brain" className={sidebarLinkClass}>
+                <SidebarIcon name="spark" />
+                <span>{t("nav.customersBrain")}</span>
               </NavLink>
             ) : null}
             {can("receivables") && isVerticalFeatureEnabled("customerAccounts", bv) ? (
@@ -446,6 +499,10 @@ export function AppLayout() {
         </nav>
 
         <div className="app-sidebar-footer">
+          <div className="app-sidebar-lang">
+            <span className="app-sidebar-lang-label">{t("nav.settings.language")}</span>
+            <LanguageSwitcher variant="segmented" />
+          </div>
           <div className="app-sidebar-user">
             {formatUserBranchLine(user, locale)}
             {user?.role ? (
@@ -471,6 +528,7 @@ export function AppLayout() {
         <main className={`app-main-content${isPosRoute ? " app-main-content--pos-wide" : ""}`}>
           <Outlet />
         </main>
+        <FloatingCalculator />
       </div>
     </div>
   );

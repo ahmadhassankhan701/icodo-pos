@@ -3,6 +3,7 @@ import { useI18n } from "../context/LanguageContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 import PrintSettings from "./PrintSettings.jsx";
 import TaxSettingsPanel from "../components/TaxSettingsPanel.jsx";
+import { LanguageSwitcher } from "../components/LanguageSwitcher.jsx";
 
 const NOTIF_PREF_KEY = "pos-notifications-enabled";
 
@@ -31,7 +32,7 @@ function SettingRow({ label, hint, control }) {
 }
 
 export default function Settings() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const [notifEnabled, setNotifEnabled] = useState(readNotifPref);
   const [notifPermission, setNotifPermission] = useState(() =>
@@ -123,18 +124,8 @@ export default function Settings() {
 
         <SettingRow
           label={t("nav.settings.language")}
-          hint={locale === "ar" ? t("lang.ar") : t("lang.en")}
-          control={
-            <button
-              type="button"
-              className="settings-lang-btn"
-              onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-              title={t("lang.switch")}
-              aria-label={t("lang.switch")}
-            >
-              {locale === "ar" ? t("lang.en") : t("lang.ar")}
-            </button>
-          }
+          hint={t("lang.hint")}
+          control={<LanguageSwitcher variant="segmented" />}
         />
       </section>
 

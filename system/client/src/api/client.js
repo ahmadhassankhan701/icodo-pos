@@ -4,6 +4,27 @@ export function getToken() {
   return localStorage.getItem("token");
 }
 
+function readUiLocale() {
+  try {
+    const s = localStorage.getItem("petstore-lang");
+    if (s === "ar" || s === "en") return s;
+  } catch {
+    /* ignore */
+  }
+  return "ar";
+}
+
+/** Prefer bilingual API error fields when present (Gulf AR/EN). */
+export function resolveApiErrorMessage(data, fallback = "Request failed") {
+  const locale = readUiLocale();
+  if (data && typeof data === "object") {
+    if (locale === "en" && data.errorEn) return String(data.errorEn);
+    if (locale === "ar" && data.errorAr) return String(data.errorAr);
+    if (data.error) return String(data.error);
+  }
+  return fallback;
+}
+
 export async function api(path, options = {}) {
   const headers = { ...options.headers };
   const token = getToken();
@@ -21,7 +42,7 @@ export async function api(path, options = {}) {
     data = text;
   }
   if (!res.ok) {
-    const err = new Error(data?.error || res.statusText || "Request failed");
+    const err = new Error(resolveApiErrorMessage(data, res.statusText || "Request failed"));
     err.status = res.status;
     err.data = data;
     err.code = data?.code;
@@ -44,7 +65,7 @@ export async function apiBlob(path) {
     } catch {
       data = { error: text };
     }
-    const err = new Error(data?.error || res.statusText || "Download failed");
+    const err = new Error(resolveApiErrorMessage(data, res.statusText || "Download failed"));
     err.status = res.status;
     err.data = data;
     err.code = data?.code;
@@ -74,7 +95,7 @@ export async function apiUploadExcel(path, file, branchId) {
     data = { error: text };
   }
   if (!res.ok) {
-    const err = new Error(data?.error || res.statusText || "Upload failed");
+    const err = new Error(resolveApiErrorMessage(data, res.statusText || "Upload failed"));
     err.status = res.status;
     err.data = data;
     err.code = data?.code;

@@ -107,9 +107,10 @@ export function clientOnboardingPayload(org, documentTypes = []) {
 
 export async function markPaymentComplete(
   org,
-  { stripeCustomerId, stripeSubscriptionId, planInterval, reference }
+  { stripeCustomerId, stripeSubscriptionId, planInterval, reference, purpose = "onboarding" }
 ) {
   const amount = PLAN_INTERVALS[planInterval]?.amount ?? null;
+  const isUpgrade = purpose === "upgrade" || org.plan === "PREMIUM" || org.paymentDone;
   const updated = await prisma.organization.update({
     where: { id: org.id },
     data: {
@@ -127,6 +128,9 @@ export async function markPaymentComplete(
       where: { organizationId: org.id, reference },
     });
     if (!existing) {
+      const note = isUpgrade
+        ? `Stripe upgrade (${planInterval || "plan"})`
+        : `Stripe checkout (${planInterval || "plan"}) — ${TRIAL_DAYS}-day trial`;
       await prisma.organizationPlanPurchase.create({
         data: {
           organizationId: org.id,
@@ -134,10 +138,15 @@ export async function markPaymentComplete(
           amount,
           currency: "SAR",
           reference,
-          note: `Stripe checkout (${planInterval || "plan"}) — ${TRIAL_DAYS}-day trial`,
+          note,
         },
       });
     }
   }
   return updated;
+}
+
+/** True when org should still be offered a paid upgrade CTA. */
+export function canUpgradePlan(org) {
+  return String(org?.plan || "FREE").toUpperCase() !== "PREMIUM";
 }

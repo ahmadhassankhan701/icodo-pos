@@ -325,7 +325,7 @@ router.post("/confirm-checkout", async (req, res, next) => {
     const org = await loadOrg(req.user.organizationId);
     if (!org) return res.status(404).json({ error: "Organization not found" });
 
-    if (org.paymentDone) {
+    if (org.paymentDone && String(org.plan || "").toUpperCase() === "PREMIUM") {
       const docs = await documentTypesFor(org.id);
       return res.json({ onboarding: clientOnboardingPayload(org, docs) });
     }
@@ -352,6 +352,7 @@ router.post("/confirm-checkout", async (req, res, next) => {
           : session.subscription?.id,
       planInterval,
       reference: session.id,
+      purpose: session.metadata?.purpose || "onboarding",
     });
 
     const docs = await documentTypesFor(org.id);

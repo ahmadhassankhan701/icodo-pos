@@ -1,7 +1,7 @@
 import { Router } from "express";
 import express from "express";
 import { prisma } from "../lib/prisma.js";
-import { markPaymentComplete } from "../lib/onboarding.js";
+import { markPaymentComplete, canUpgradePlan } from "../lib/onboarding.js";
 import { getStripe } from "../lib/stripe.js";
 
 const router = Router();
@@ -35,7 +35,11 @@ router.post(
         const organizationId = session.metadata?.organizationId;
         if (organizationId) {
           const org = await prisma.organization.findUnique({ where: { id: organizationId } });
-          if (org && !org.paymentDone) {
+          const purpose = String(session.metadata?.purpose || "onboarding");
+          const needsApply =
+            org &&
+            (purpose === "upgrade" || !org.paymentDone || canUpgradePlan(org));
+          if (needsApply) {
             await markPaymentComplete(org, {
               stripeCustomerId:
                 typeof session.customer === "string" ? session.customer : session.customer?.id,
@@ -45,6 +49,7 @@ router.post(
                   : session.subscription?.id,
               planInterval: session.metadata?.planInterval || org.selectedPlanInterval,
               reference: session.id,
+              purpose,
             });
           }
         }

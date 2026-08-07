@@ -3,10 +3,11 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useMarketingCopy } from "./copy.js";
 import { IcodoNavBrand, IcodoLogo } from "./IcodoLogo.jsx";
+import { LanguageSwitcher } from "../components/LanguageSwitcher.jsx";
 import "./marketing.css";
 
 export function MarketingLayout() {
-  const { locale, setLocale } = useI18n();
+  const { locale } = useI18n();
   const c = useMarketingCopy(locale);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -50,14 +51,7 @@ export function MarketingLayout() {
           </nav>
 
           <div className="mkt-nav-actions">
-            <button
-              type="button"
-              className="mkt-btn mkt-btn-ghost"
-              style={{ minHeight: "2.5rem", padding: "0.4rem 0.75rem" }}
-              onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
-            >
-              {locale === "ar" ? "EN" : "ع"}
-            </button>
+            <LanguageSwitcher variant="compact" className="mkt-lang-switch" />
             <Link to="/login" className="mkt-btn mkt-btn-ghost" style={{ minHeight: "2.5rem" }}>
               {c.nav.signIn}
             </Link>

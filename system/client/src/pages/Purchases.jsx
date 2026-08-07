@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
@@ -308,7 +309,12 @@ export default function Purchases() {
       ) : null}
 
       <div className="card" style={{ display: "grid", gap: 10 }}>
-        <strong>{t("purchases.autoReorderTitle")}</strong>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+          <strong>{t("purchases.autoReorderTitle")}</strong>
+          <Link to="/stock-brain" style={{ fontSize: 13 }}>
+            {t("nav.stockBrain")} →
+          </Link>
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <input
             type="number"

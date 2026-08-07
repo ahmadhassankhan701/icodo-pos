@@ -117,6 +117,8 @@ model Organization {
   deliveryRoutes          DeliveryRoute[]
   deliveryStops           DeliveryStop[]
   inventoryLots           InventoryLot[]
+  purchaseDrafts          PurchaseDraft[]
+  promoDrafts             PromoDraft[]
   saleItemLots            SaleItemLot[]
 }
 
@@ -539,6 +541,7 @@ model Coupon {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   sales          Sale[]
+  promoDrafts    PromoDraft[]
 
   @@unique([organizationId, code])
   @@index([organizationId, active])
@@ -641,6 +644,8 @@ model Branch {
   sales          Sale[]
   refunds        Refund[]
   purchases      Purchase[]
+  purchaseDrafts PurchaseDraft[]
+  promoDrafts    PromoDraft[]
   cashSessions   CashSession[]
   auditLogs      AuditLog[]
   heldCarts      HeldCart[]
@@ -666,6 +671,7 @@ model Supplier {
   note           String?
   createdAt      DateTime     @default(now())
   purchases      Purchase[]
+  purchaseDrafts PurchaseDraft[]
 }
 
 model Account {
@@ -915,6 +921,8 @@ model User {
   sales          Sale[]
   refunds        Refund[]
   purchases      Purchase[]
+  purchaseDrafts PurchaseDraft[]
+  promoDrafts    PromoDraft[]
   cashSessionsOpened CashSession[] @relation("CashSessionOpenedBy")
   cashSessionsClosed CashSession[] @relation("CashSessionClosedBy")
   auditLogs          AuditLog[]
@@ -967,6 +975,8 @@ model Product {
   saleItems      SaleItem[]
   refundItems    RefundItem[]
   purchaseItems  PurchaseItem[]
+  purchaseDraftItems PurchaseDraftItem[]
+  promoDraftItems PromoDraftItem[]
   inventoryLots  InventoryLot[]
 
   @@unique([organizationId, sku])
@@ -1176,6 +1186,7 @@ model Purchase {
   note       String?
   createdAt  DateTime       @default(now())
   items      PurchaseItem[]
+  fromDraft  PurchaseDraft?
 }
 
 model PurchaseItem {
@@ -1188,6 +1199,98 @@ model PurchaseItem {
   unitCost   Decimal
   subtotal   Decimal
   expiryDate DateTime?
+}
+
+/// Smart Reorder draft PO — review before converting to a real Purchase receipt
+model PurchaseDraft {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branchId       String
+  branch         Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  supplierId     String?
+  supplier       Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User                @relation(fields: [userId], references: [id])
+  /// OPEN | CONVERTED | CANCELLED
+  status         String              @default("OPEN")
+  note           String?
+  /// REORDER | MANUAL | MIXED
+  source         String              @default("REORDER")
+  purchaseId     String?             @unique
+  purchase       Purchase?           @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  items          PurchaseDraftItem[]
+
+  @@index([organizationId, branchId, status])
+}
+
+model PurchaseDraftItem {
+  id        String        @id @default(cuid())
+  draftId   String
+  draft     PurchaseDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product       @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitCost  Decimal?
+  /// Why this line was suggested (severity / dailySales snapshot)
+  reason    String?
+  createdAt DateTime      @default(now())
+
+  @@index([draftId])
+}
+
+/// Module 2: Intelligent Pricing & Promo Engine — review before applying price/coupon changes
+model PromoDraft {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branchId       String?
+  branch         Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  /// OPEN | APPLIED | CANCELLED
+  status         String           @default("OPEN")
+  /// MARKDOWN | PRICE_CHANGE | COUPON | BUNDLE
+  kind           String           @default("MARKDOWN")
+  /// PRICE | COUPON — how convert applies
+  applyMode      String           @default("PRICE")
+  /// WASTE | VELOCITY | MARGIN | BUNDLE | MANUAL | SIMULATOR
+  source         String           @default("MANUAL")
+  title          String?
+  note           String?
+  couponId       String?
+  coupon         Coupon?          @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  items          PromoDraftItem[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, branchId, status])
+}
+
+model PromoDraftItem {
+  id              String     @id @default(cuid())
+  draftId         String
+  draft           PromoDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product    @relation(fields: [productId], references: [id])
+  /// PERCENT_OFF | SET_PRICE | BUNDLE
+  action          String     @default("PERCENT_OFF")
+  currentPrice    Decimal?
+  cost            Decimal?
+  suggestedPrice  Decimal?
+  discountPercent Decimal?
+  /// Snapshot of price before apply (for audit / future revert)
+  previousPrice   Decimal?
+  buyQty          Int?
+  freeQty         Int?
+  pairedProductId String?
+  reason          String?
+  createdAt       DateTime   @default(now())
+
+  @@index([draftId])
 }
 
 model SaleItem {

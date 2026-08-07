@@ -47,8 +47,12 @@ export default function OnboardingProfile() {
     if (!user || loading) return;
     if (isOnboardingComplete(user)) return;
     if (user.role !== "ADMIN") return;
-    if (user.onboarding?.profileDocsDone) {
-      nav("/onboarding/payment", { replace: true });
+    // Rejected users must stay on profile (or rejected page) — never auto-skip to payment.
+    if (user.onboarding?.profileDocsDone && user.onboarding?.reviewStatus !== "REJECTED") {
+      nav(
+        user.onboarding?.paymentDone ? "/onboarding/review" : "/onboarding/payment",
+        { replace: true },
+      );
       return;
     }
     api("/api/onboarding/status")
@@ -87,8 +91,13 @@ export default function OnboardingProfile() {
     return <Navigate to={getPostAuthPath(user)} replace />;
   }
   if (user.role !== "ADMIN") return <Navigate to="/onboarding/pending" replace />;
-  if (user.onboarding?.profileDocsDone) {
-    return <Navigate to="/onboarding/payment" replace />;
+  if (user.onboarding?.profileDocsDone && user.onboarding?.reviewStatus !== "REJECTED") {
+    return (
+      <Navigate
+        to={user.onboarding?.paymentDone ? "/onboarding/review" : "/onboarding/payment"}
+        replace
+      />
+    );
   }
 
   const setField = (key) => (e) => {
@@ -120,8 +129,9 @@ export default function OnboardingProfile() {
       if (files.ibanDocument) fd.append("ibanDocument", files.ibanDocument);
 
       await api("/api/onboarding/profile", { method: "POST", body: fd });
-      await refreshUser();
-      nav("/onboarding/payment", { replace: true });
+      const u = await refreshUser();
+      const paid = Boolean(u?.onboarding?.paymentDone ?? user.onboarding?.paymentDone);
+      nav(paid ? "/onboarding/review" : "/onboarding/payment", { replace: true });
     } catch (x) {
       setErr(x.message || t("onboarding.profileFailed"));
     } finally {
@@ -129,12 +139,22 @@ export default function OnboardingProfile() {
     }
   };
 
+  const isRejected = user.onboarding?.reviewStatus === "REJECTED";
+  const rejectNote = user.onboarding?.reviewNote;
+
   return (
     <OnboardingShell
       stepKey="profile"
       title={t("onboarding.profileTitle")}
       subtitle={t("onboarding.profileSubtitle")}
     >
+      {isRejected ? (
+        <div className="mkt-error" role="alert" style={{ marginBottom: 16 }}>
+          <strong>{t("onboarding.rejectedBanner")}</strong>
+          {rejectNote ? <div style={{ marginTop: 6 }}>{rejectNote}</div> : null}
+          <p style={{ margin: "8px 0 0", fontSize: 13 }}>{t("onboarding.rejectedResubmitHint")}</p>
+        </div>
+      ) : null}
       <form className="mkt-form" onSubmit={submit}>
         <fieldset className="mkt-onboarding-fieldset">
           <legend>{t("onboarding.section.business")}</legend>

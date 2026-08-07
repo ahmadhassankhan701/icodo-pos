@@ -5,8 +5,7 @@ const ALLOWED = new Set(Object.values(BusinessVertical));
 /** Must stay in sync with client MVP_ENABLED_VERTICAL_IDS */
 export const MVP_ENABLED_VERTICAL_IDS = new Set([
   "GROCERY",
-  "PHARMACY",
-  "CAFE",
+  "RETAIL_GENERAL",
 ]);
 
 /**

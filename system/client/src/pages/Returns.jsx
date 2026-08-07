@@ -164,7 +164,13 @@ export default function Returns() {
           </label>
           <label className="page-form-field">
             <span>{t("returns.note")}</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} style={inp} />
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              style={inp}
+              placeholder={t("returns.noteHint")}
+            />
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("returns.noteRequiredHint")}</span>
           </label>
         </div>
         <strong>{t("returns.lines")}</strong>

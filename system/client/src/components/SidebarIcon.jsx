@@ -35,6 +35,13 @@ export function SidebarIcon({ name, size = 18 }) {
           <path d="M16 15v-7" />
         </svg>
       );
+    case "spark":
+      return (
+        <svg {...props}>
+          <path d="M12 3l1.6 5.2L19 10l-5.4 1.8L12 17l-1.6-5.2L5 10l5.4-1.8L12 3z" />
+          <path d="M19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15z" />
+        </svg>
+      );
     case "bell":
       return (
         <svg {...props}>

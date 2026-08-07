@@ -33,6 +33,10 @@ export default function OnboardingPayment() {
       nav("/onboarding/profile", { replace: true });
       return;
     }
+    if (user.onboarding?.paymentDone) {
+      nav("/onboarding/review", { replace: true });
+      return;
+    }
     api("/api/onboarding/status")
       .then((data) => {
         setPlans(data.onboarding?.plans || []);
@@ -57,6 +61,9 @@ export default function OnboardingPayment() {
   if (user.role !== "ADMIN") return <Navigate to="/onboarding/pending" replace />;
   if (!user.onboarding?.profileDocsDone) {
     return <Navigate to="/onboarding/profile" replace />;
+  }
+  if (user.onboarding?.paymentDone) {
+    return <Navigate to="/onboarding/review" replace />;
   }
 
   const startCheckout = async () => {
