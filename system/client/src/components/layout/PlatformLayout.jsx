@@ -6,7 +6,7 @@ import { useI18n } from "../../context/LanguageContext.jsx";
 import { IcodoLogo } from "../../marketing/IcodoLogo.jsx";
 
 /** Platform admin console — English only for now. */
-export function PlatformLayout() {
+export default function PlatformLayout() {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { t, locale, setLocale } = useI18n();
@@ -40,9 +40,6 @@ export function PlatformLayout() {
           </NavLink>
           <NavLink to="/platform/users" className={({ isActive }) => `app-sidebar-link${isActive ? " is-active" : ""}`}>
             {t("platform.users")}
-          </NavLink>
-          <NavLink to="/dashboard" className={({ isActive }) => `app-sidebar-link${isActive ? " is-active" : ""}`}>
-            {t("platform.backApp")}
           </NavLink>
         </nav>
       </aside>

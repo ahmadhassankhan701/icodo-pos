@@ -134,7 +134,7 @@ function SidebarNavSection({ sectionId, title, icon, expanded, onToggle, t, chil
 }
 
 export function AppLayout() {
-  const { user, logout, isAdmin, isManager, isPlatformAdmin, can } = useAuth();
+  const { user, logout, isAdmin, isManager, can } = useAuth();
   const { isDark } = useTheme();
   const {
     branches,
@@ -448,12 +448,6 @@ export function AppLayout() {
             onToggle={() => toggleNavSection("admin")}
             t={t}
           >
-            {isPlatformAdmin ? (
-              <NavLink to="/platform/organizations" className={sidebarLinkClass}>
-                <SidebarIcon name="platform" />
-                <span>{t("nav.platform")}</span>
-              </NavLink>
-            ) : null}
             {isAdmin ? (
               <NavLink to="/users" className={sidebarLinkClass}>
                 <SidebarIcon name="users" />

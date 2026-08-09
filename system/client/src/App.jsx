@@ -95,6 +95,10 @@ function Protected({ children, roles, permission, anyPermission }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  // Platform operators stay in the platform console — not a tenant POS session.
+  if (user.isPlatformAdmin) {
+    return <Navigate to="/platform/analytics" replace />;
+  }
   if (!isOnboardingComplete(user)) {
     return <Navigate to={getPostAuthPath(user)} replace />;
   }
@@ -251,11 +255,9 @@ export default function App() {
         <Route
           path="/platform"
           element={
-            <Protected>
-              <ProtectedPlatform>
-                <PlatformLayout />
-              </ProtectedPlatform>
-            </Protected>
+            <ProtectedPlatform>
+              <PlatformLayout />
+            </ProtectedPlatform>
           }
         >
           <Route index element={<Navigate to="/platform/analytics" replace />} />
