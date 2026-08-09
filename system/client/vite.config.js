@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["pwa-192.png", "pwa-512.png", "favicon.png", "pwa-icon-source.svg"],
+      includeAssets: ["pwa-192.png", "pwa-512.png", "favicon.png", "favicon-48.png", "apple-touch-icon.png"],
       manifest: {
         name: "i codo POS",
         short_name: "i codo",
