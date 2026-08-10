@@ -52,5 +52,6 @@ export async function buildSessionUser(prisma, user, organization, branch) {
     onboarding,
     onboardingComplete: isPlatformAdmin || onboarding.complete,
     tax,
+    associateCanAcceptPayment: org.associateCanAcceptPayment !== false,
   };
 }

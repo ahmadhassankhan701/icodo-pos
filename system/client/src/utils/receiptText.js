@@ -41,7 +41,19 @@ export function buildReceiptPlainText(sale, branchName, locale, taxInfo) {
   }
   lines.push(`${locale === "en" ? "Date" : "التاريخ"}: ${new Date(sale.createdAt).toLocaleString(loc)}`);
   lines.push(`${locale === "en" ? "Invoice #" : "رقم الفاتورة"}: ${sale.invoiceNumber || sale.id}`);
-  lines.push(`${locale === "en" ? "Cashier" : "الكاشير"}: ${sale.user?.name || "—"}`);
+  const sellerName =
+    locale === "en" && sale.user?.nameEn?.trim()
+      ? sale.user.nameEn.trim()
+      : sale.user?.name || "—";
+  const sellerLabel =
+    sale.user?.role === "ASSOCIATE"
+      ? locale === "en"
+        ? "Floor associate"
+        : "بائع الأرضية"
+      : locale === "en"
+        ? "Cashier"
+        : "الكاشير";
+  lines.push(`${sellerLabel}: ${sellerName}${sale.user?.email ? ` (${sale.user.email})` : ""}`);
   if (sale.channel === "WHOLESALE") {
     lines.push(locale === "en" ? "Channel: Wholesale" : "القناة: بيع بالجملة");
   }

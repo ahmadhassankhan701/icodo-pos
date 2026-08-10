@@ -1,35 +1,70 @@
 import { useEffect, useState } from "react";
+import { getToken } from "../api/client.js";
 import {
   resolveImageUrlForDisplay,
   dataUrlToObjectUrl,
 } from "../utils/imageUrl.js";
 
+function isProductImageApiPath(url) {
+  return typeof url === "string" && /\/api\/product-images\//i.test(url);
+}
+
 /**
- * رابط آمن لـ &lt;img src&gt;: أي data: يُحوَّل إلى blob: لأن Chrome يعطي net::ERR_INVALID_URL
- * لسلاسل base64 الطويلة كقيمة src مباشرة.
+ * Safe &lt;img src&gt;: data: → blob:; /api/product-images/* → authenticated blob fetch.
  */
 export function useSafeImageSrc(rawUrl) {
   const [src, setSrc] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+
+    const cleanup = () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+
     const resolved = resolveImageUrlForDisplay(rawUrl);
     if (!resolved) {
       setSrc("");
-      return undefined;
+      return cleanup;
     }
-    if (!resolved.startsWith("data:")) {
+
+    if (resolved.startsWith("data:")) {
+      const u = dataUrlToObjectUrl(resolved);
+      if (!u) {
+        setSrc("");
+        return cleanup;
+      }
+      objectUrl = u;
+      setSrc(u);
+      return cleanup;
+    }
+
+    if (!isProductImageApiPath(resolved)) {
       setSrc(resolved);
-      return undefined;
+      return cleanup;
     }
-    const u = dataUrlToObjectUrl(resolved);
-    if (!u) {
-      setSrc("");
-      return undefined;
-    }
-    setSrc(u);
-    return () => {
-      if (u.startsWith("blob:")) URL.revokeObjectURL(u);
-    };
+
+    const token = getToken();
+    const headers = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    fetch(resolved, { headers })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("image fetch failed");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc("");
+      });
+
+    return cleanup;
   }, [rawUrl]);
 
   return src;

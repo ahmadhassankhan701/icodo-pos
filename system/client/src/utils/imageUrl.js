@@ -21,6 +21,11 @@ export function resolveImageUrlForDisplay(raw) {
   if (/^https?:\/\//i.test(s)) return s;
   if (s.startsWith("//")) return `https:${s}`;
   if (s.startsWith("data:") || s.startsWith("blob:")) return s;
+  // Authenticated DB image API — resolve against API base, not CDN prefix
+  if (s.startsWith("/api/product-images/")) {
+    const apiBase = cleanViteBase(import.meta.env.VITE_API_URL);
+    return apiBase ? `${apiBase}${s}` : s;
+  }
   const prefix =
     cleanViteBase(import.meta.env.VITE_IMAGE_URL_PREFIX) ||
     cleanViteBase(import.meta.env.VITE_PUBLIC_IMAGE_BASE_URL);

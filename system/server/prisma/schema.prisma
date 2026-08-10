@@ -45,6 +45,8 @@ model Organization {
   managerPermissions String?
   /// صلاحيات دور الموظف/الكاشير (JSON)
   cashierPermissions String?
+  /// هل يُسمح لبائع الأرضية بإتمام الدفع من الجوال (وإلا يُرسل السلة للكاشير)
+  associateCanAcceptPayment Boolean @default(true)
 
   /// Onboarding: account created → profile/docs → Stripe payment → complete
   profileDocsDone Boolean @default(false)
@@ -84,6 +86,7 @@ model Organization {
   branches                 Branch[]
   planPurchases            OrganizationPlanPurchase[]
   onboardingDocuments      OrganizationDocument[]
+  productImages            ProductImage[]
   products                 Product[]
   brands                   Brand[]
   categories               Category[]
@@ -155,6 +158,24 @@ model OrganizationDocument {
 
   @@unique([organizationId, docType])
   @@index([organizationId])
+}
+
+/// Product photos stored in the database (no external object storage required)
+model ProductImage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Set when the image is attached to a product (may be null right after upload)
+  productId      String?
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fileName       String
+  mimeType       String
+  size           Int
+  data           Bytes
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([productId])
 }
 
 /// Organization subscription purchases and renewals shown in the Plan page.
@@ -367,6 +388,8 @@ enum Role {
   ADMIN
   MANAGER
   CASHIER
+  /// Floor sales associate — scan & checkout only (mobile)
+  ASSOCIATE
 }
 
 enum PetType {
@@ -961,6 +984,7 @@ model Product {
   subcategoryId  String?
   productSubcategory Subcategory? @relation("ProductSubcategory", fields: [subcategoryId], references: [id], onDelete: SetNull)
   imageUrl       String?
+  productImages  ProductImage[]
   isActive       Boolean      @default(true)
   externalId     String?
   /// اختياري: إضافات/خيارات للكافيه والمطاعم [{key,label,labelAr?,priceDelta}]

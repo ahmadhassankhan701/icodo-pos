@@ -216,6 +216,7 @@ export default function SalesHistory() {
               <tr style={{ color: "var(--muted)" }}>
                 <th style={th}>{t("returns.colDate")}</th>
                 <th style={th}>{t("sales.colInvoice")}</th>
+                <th style={th}>{t("sales.colSeller")}</th>
                 <th style={th}>{t("sales.colCustomer")}</th>
                 <th style={th}>{t("sales.colPayment")}</th>
                 <th style={th}>{t("sales.colTotal")}</th>
@@ -250,6 +251,17 @@ export default function SalesHistory() {
                           <code style={{ fontSize: 12 }}>{s.invoiceNumber || s.id.slice(0, 8)}</code>
                         </button>
                         <div style={{ color: "var(--muted)", fontSize: 11 }}>{s.branch?.name || ""}</div>
+                      </td>
+                      <td style={td}>
+                        <div>
+                          {locale === "en" && s.user?.nameEn?.trim()
+                            ? s.user.nameEn.trim()
+                            : s.user?.name || "—"}
+                        </div>
+                        <div style={{ color: "var(--muted)", fontSize: 11 }}>
+                          {s.user?.role ? t(`role.${s.user.role}`) : ""}
+                          {s.user?.email ? ` · ${s.user.email}` : ""}
+                        </div>
                       </td>
                       <td style={td}>{s.customer?.name || s.customer?.phone || "—"}</td>
                       <td style={td}>{payLabel(t, s.paymentMethod)}</td>
@@ -302,7 +314,7 @@ export default function SalesHistory() {
                     </tr>
                     {open ? (
                       <tr>
-                        <td style={td} colSpan={7}>
+                        <td style={td} colSpan={8}>
                           <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
                             {t("sales.lines")}:{" "}
                             {(s.items || [])

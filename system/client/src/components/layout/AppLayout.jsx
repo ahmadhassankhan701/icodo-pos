@@ -269,6 +269,12 @@ export function AppLayout() {
               <span>{t("nav.pos")}</span>
             </NavLink>
           ) : null}
+          {can("floorPos") ? (
+            <NavLink to="/floor-pos" className={sidebarLinkClass} end>
+              <SidebarIcon name="pos" />
+              <span>{t("nav.floorPos")}</span>
+            </NavLink>
+          ) : null}
 
           <SidebarNavSection
             sectionId="inventory"

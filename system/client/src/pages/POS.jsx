@@ -1059,7 +1059,10 @@ export default function POS() {
                         {locale === "en" ? "lines" : "سطر"}
                       </span>
                     </span>
-                    <span style={{ fontSize: 12, color: "var(--muted)" }}>{h.user?.name || "—"}</span>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                      {h.user?.name || "—"}
+                      {h.user?.role === "ASSOCIATE" ? ` (${t("role.ASSOCIATE")})` : ""}
+                    </span>
                     <button type="button" className="btn-touch" style={{ background: "var(--accent)", color: "#fff" }} onClick={() => restoreHeld(h)}>
                       {t("pos.heldRestore")}
                     </button>

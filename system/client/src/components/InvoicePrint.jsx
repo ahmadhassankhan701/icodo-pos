@@ -51,7 +51,11 @@ export function InvoicePrint({ sale, branchName, taxInfo }) {
           {t("invoice.id")} {sale.invoiceNumber || sale.id}
         </div>
         <div>
-          {t("invoice.cashier")} {sale.user?.name || "—"}
+          {sale.user?.role === "ASSOCIATE" ? t("invoice.associate") : t("invoice.cashier")}{" "}
+          {locale === "en" && sale.user?.nameEn?.trim()
+            ? sale.user.nameEn.trim()
+            : sale.user?.name || "—"}
+          {sale.user?.email ? ` (${sale.user.email})` : ""}
         </div>
         {sale.channel === "WHOLESALE" ? (
           <div style={{ fontWeight: 700, color: "#6d28d9" }}>{t("invoice.saleChannelWholesale")}</div>

@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import { api } from "../api/client.js";
+import { useToast } from "../context/ToastContext.jsx";
 import PrintSettings from "./PrintSettings.jsx";
 import TaxSettingsPanel from "../components/TaxSettingsPanel.jsx";
 import { LanguageSwitcher } from "../components/LanguageSwitcher.jsx";
@@ -34,10 +37,52 @@ function SettingRow({ label, hint, control }) {
 export default function Settings() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const { user, isAdmin, isManager, refreshUser } = useAuth();
+  const { showToast } = useToast();
   const [notifEnabled, setNotifEnabled] = useState(readNotifPref);
   const [notifPermission, setNotifPermission] = useState(() =>
     typeof Notification !== "undefined" ? Notification.permission : "unsupported",
   );
+  const [associatePay, setAssociatePay] = useState(() => user?.associateCanAcceptPayment !== false);
+  const [associatePayBusy, setAssociatePayBusy] = useState(false);
+
+  useEffect(() => {
+    setAssociatePay(user?.associateCanAcceptPayment !== false);
+  }, [user?.associateCanAcceptPayment]);
+
+  useEffect(() => {
+    if (!isAdmin && !isManager) return undefined;
+    let cancelled = false;
+    api("/api/org-settings")
+      .then((s) => {
+        if (!cancelled) setAssociatePay(s?.associateCanAcceptPayment !== false);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, isManager]);
+
+  const toggleAssociatePayment = async () => {
+    const next = !associatePay;
+    setAssociatePayBusy(true);
+    try {
+      const s = await api("/api/org-settings", {
+        method: "PATCH",
+        body: { associateCanAcceptPayment: next },
+      });
+      setAssociatePay(s?.associateCanAcceptPayment !== false);
+      if (typeof refreshUser === "function") await refreshUser();
+      showToast(
+        next ? t("settings.associatePayOn") : t("settings.associatePayOff"),
+        "success"
+      );
+    } catch (e) {
+      showToast(e.message || t("settings.associatePayFail"), "error");
+    } finally {
+      setAssociatePayBusy(false);
+    }
+  };
 
   const toggleNotifications = async () => {
     if (typeof Notification === "undefined") {
@@ -128,6 +173,28 @@ export default function Settings() {
           control={<LanguageSwitcher variant="segmented" />}
         />
       </section>
+
+      {isAdmin || isManager ? (
+        <section className="settings-card" aria-labelledby="settings-floor-heading">
+          <h2 id="settings-floor-heading">{t("settings.floorSales")}</h2>
+          <SettingRow
+            label={t("settings.associateCanPay")}
+            hint={t("settings.associateCanPayHint")}
+            control={
+              <button
+                type="button"
+                className={`settings-switch${associatePay ? " is-on" : ""}`}
+                role="switch"
+                aria-checked={associatePay}
+                disabled={associatePayBusy}
+                onClick={toggleAssociatePayment}
+              >
+                <span className="settings-switch-knob" />
+              </button>
+            }
+          />
+        </section>
+      ) : null}
 
       <TaxSettingsPanel />
 

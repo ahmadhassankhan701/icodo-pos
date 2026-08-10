@@ -20,6 +20,7 @@ import OnboardingReview from "./pages/onboarding/OnboardingReview.jsx";
 import OnboardingRejected from "./pages/onboarding/OnboardingRejected.jsx";
 import { getPostAuthPath, isOnboardingComplete } from "./lib/onboardingPath.js";
 import POS from "./pages/POS.jsx";
+import FloorPos from "./pages/FloorPos.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
 import Categories from "./pages/Categories.jsx";
@@ -99,6 +100,10 @@ function Protected({ children, roles, permission, anyPermission }) {
   if (user.isPlatformAdmin) {
     return <Navigate to="/platform/analytics" replace />;
   }
+  // Floor associates only use /floor-pos
+  if (user.role === "ASSOCIATE") {
+    return <Navigate to="/floor-pos" replace />;
+  }
   if (!isOnboardingComplete(user)) {
     return <Navigate to={getPostAuthPath(user)} replace />;
   }
@@ -115,6 +120,24 @@ function Protected({ children, roles, permission, anyPermission }) {
     }
   }
   return children;
+}
+
+function ProtectedFloor({ children }) {
+  const { user, loading, can } = useAuth();
+  const { t } = useI18n();
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        {t("common.loading")}
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.isPlatformAdmin) return <Navigate to="/platform/analytics" replace />;
+  if (user.role === "ASSOCIATE") return children;
+  if (!isOnboardingComplete(user)) return <Navigate to={getPostAuthPath(user)} replace />;
+  if (user.role === "ADMIN" || can("floorPos") || can("pos")) return children;
+  return <Navigate to={getPostAuthPath(user)} replace />;
 }
 
 function PublicHome() {
@@ -268,6 +291,14 @@ export default function App() {
           <Route path="users" element={<PlatformUsers />} />
         </Route>
         <Route
+          path="/floor-pos"
+          element={
+            <ProtectedFloor>
+              <FloorPos />
+            </ProtectedFloor>
+          }
+        />
+        <Route
           element={
             <Protected>
               <AppLayout />
@@ -275,6 +306,14 @@ export default function App() {
           }
         >
           <Route path="/pos" element={<Protected permission="pos"><POS /></Protected>} />
+          <Route
+            path="/floor-assist"
+            element={
+              <Protected permission="floorPos">
+                <Navigate to="/floor-pos" replace />
+              </Protected>
+            }
+          />
           <Route path="/wholesale" element={<Navigate to="/pos" replace />} />
           <Route path="/sync-queue" element={<SyncQueueStatus />} />
           <Route path="/alerts" element={<Alerts />} />

@@ -23,6 +23,8 @@ export function resolveStoredImageUrl(raw) {
   if (/^https?:\/\//i.test(s)) return s.slice(0, 2000);
   if (s.startsWith("//")) return s.slice(0, 2000);
   if (s.startsWith("data:") || s.startsWith("blob:")) return s.slice(0, 2000);
+  // DB-backed product images — keep API path (client fetches with auth)
+  if (s.startsWith("/api/product-images/")) return s.slice(0, 200);
   const prefix =
     cleanEnvUrl(process.env.SUPABASE_PUBLIC_IMAGE_PREFIX) ||
     cleanEnvUrl(process.env.PUBLIC_IMAGE_BASE_URL);

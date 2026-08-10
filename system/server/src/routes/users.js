@@ -50,7 +50,7 @@ router.post("/", async (req, res) => {
   if (String(password).length < 6) {
     return res.status(400).json({ error: "كلمة المرور يجب ألا تقل عن 6 أحرف" });
   }
-  if (!["ADMIN", "MANAGER", "CASHIER"].includes(String(role))) {
+  if (!["ADMIN", "MANAGER", "CASHIER", "ASSOCIATE"].includes(String(role))) {
     return res.status(400).json({ error: "دور غير صالح" });
   }
   const roleStr = String(role);
@@ -123,7 +123,7 @@ router.patch("/:id", async (req, res) => {
   const data = {};
   if (name != null) data.name = String(name).trim();
   if (nameEn !== undefined) data.nameEn = nameEn?.trim() || null;
-  if (role && ["ADMIN", "MANAGER", "CASHIER"].includes(String(role))) {
+  if (role && ["ADMIN", "MANAGER", "CASHIER", "ASSOCIATE"].includes(String(role))) {
     data.role = String(role);
   }
   if (branchId !== undefined) data.branchId = branchId || null;

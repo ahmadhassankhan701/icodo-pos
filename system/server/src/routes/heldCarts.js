@@ -65,14 +65,14 @@ router.get("/", async (req, res) => {
     branchId: String(bid),
     branch: { organizationId: req.user.organizationId },
   };
-  if (req.user.role === "CASHIER") {
+  if (req.user.role === "ASSOCIATE") {
     where.userId = req.user.sub;
   }
   const rows = await prisma.heldCart.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: 50,
-    include: { user: { select: { id: true, name: true } } },
+    include: { user: { select: { id: true, name: true, nameEn: true, role: true } } },
   });
   res.json(rows);
 });
@@ -128,7 +128,7 @@ router.post("/", async (req, res) => {
         lineCount: items.length,
         subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
       },
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { id: true, name: true, nameEn: true, role: true } } },
     });
 
     await writeAudit({
@@ -161,7 +161,8 @@ router.delete("/:id", async (req, res) => {
   const canDelete =
     row.userId === req.user.sub ||
     req.user.role === "ADMIN" ||
-    req.user.role === "MANAGER";
+    req.user.role === "MANAGER" ||
+    req.user.role === "CASHIER";
   if (!canDelete) {
     return res.status(403).json({ error: "يمكنك حذف تعليقاتك فقط" });
   }

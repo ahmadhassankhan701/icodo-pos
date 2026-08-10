@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { api, apiBlob, apiUploadExcel } from "../api/client.js";
+import { api, apiBlob, apiUploadExcel, apiUploadImage } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
@@ -56,6 +56,8 @@ export default function Products() {
   const [editId, setEditId] = useState("");
   const [formError, setFormError] = useState("");
   const [formBusy, setFormBusy] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageFileRef = useRef(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -202,7 +204,7 @@ export default function Products() {
     }
     if (!data.categoryId) return t("products.categoryRequired");
     const img = String(data.imageUrl || "").trim();
-    if (!img) return t("products.imageUrlRequired");
+    if (!img) return t("products.imageRequired");
     if (!/^https?:\/\/\S+/i.test(img) && !img.startsWith("/")) return t("products.errImageUrl");
     if (data.initialStock != null && data.initialStock !== "") {
       const s = Number(data.initialStock);
@@ -1061,14 +1063,51 @@ export default function Products() {
                 />
               </label>
               <label style={{ ...fld, gridColumn: "1 / -1" }}>
-                <span>{t("products.imageUrl")} *</span>
+                <span>{t("products.imageFile")} *</span>
                 <input
+                  ref={imageFileRef}
                   style={inp}
-                  required
-                  value={form.imageUrl}
-                  onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={formBusy || imageUploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) {
+                      setFormError(t("products.imageTooLarge"));
+                      return;
+                    }
+                    setFormError("");
+                    setImageUploading(true);
+                    try {
+                      const res = await apiUploadImage(
+                        "/api/products/upload-image",
+                        file,
+                        formMode === "edit" && editId ? { productId: editId } : {}
+                      );
+                      if (!res?.url) throw new Error(t("products.imageUploadFailed"));
+                      setForm((f) => ({ ...f, imageUrl: res.url }));
+                      showToast(t("products.imageUploaded"), "success");
+                    } catch (err) {
+                      setFormError(err.message || t("products.imageUploadFailed"));
+                    } finally {
+                      setImageUploading(false);
+                    }
+                  }}
                 />
+                <span style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                  {imageUploading ? t("products.imageUploading") : t("products.imageFileHint")}
+                </span>
               </label>
+              {String(form.imageUrl || "").trim() ? (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 8 }}>
+                    {t("products.imagePreview")}
+                  </span>
+                  <ProductImagePreview url={form.imageUrl} alt="" width={140} height={140} />
+                </div>
+              ) : null}
               {showCafeModifiers ? (
                 <div style={{ gridColumn: "1 / -1", display: "grid", gap: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
@@ -1166,14 +1205,6 @@ export default function Products() {
                       </button>
                     </div>
                   ))}
-                </div>
-              ) : null}
-              {String(form.imageUrl || "").trim() ? (
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 8 }}>
-                    {t("products.imagePreview")}
-                  </span>
-                  <ProductImagePreview url={form.imageUrl} alt="" width={140} height={140} />
                 </div>
               ) : null}
             </div>

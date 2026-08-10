@@ -115,6 +115,20 @@ router.post("/checkout", async (req, res) => {
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "السلة فارغة" });
   }
+  if (req.user.role === "ASSOCIATE") {
+    const orgFlags = await prisma.organization.findUnique({
+      where: { id: req.user.organizationId },
+      select: { associateCanAcceptPayment: true },
+    });
+    if (orgFlags && orgFlags.associateCanAcceptPayment === false) {
+      return res.status(403).json({
+        error: "الدفع من بائع الأرضية معطّل — أرسل السلة للكاشير",
+        errorAr: "الدفع من بائع الأرضية معطّل — أرسل السلة للكاشير",
+        errorEn: "Floor associate payment is disabled — send the cart to the cashier",
+        code: "ASSOCIATE_PAYMENT_DISABLED",
+      });
+    }
+  }
   const pmSingle = OK_PAY.has(String(paymentMethod).toUpperCase())
     ? String(paymentMethod).toUpperCase()
     : "CASH";
@@ -473,7 +487,7 @@ router.post("/checkout", async (req, res) => {
       items: { include: { product: true } },
       branch: true,
       customer: true,
-      user: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, nameEn: true, role: true, email: true } },
       coupon: true,
     };
 
@@ -877,7 +891,7 @@ router.get("/", async (req, res) => {
       items: { include: { product: { select: { name: true, nameEn: true, sku: true } } } },
       branch: { select: { name: true } },
       customer: { select: { id: true, name: true, phone: true } },
-      user: { select: { name: true } },
+      user: { select: { id: true, name: true, nameEn: true, role: true, email: true } },
     },
   });
   res.json(sales);
@@ -893,7 +907,7 @@ router.get("/:id", async (req, res) => {
       items: { include: { product: true } },
       branch: true,
       customer: true,
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: { id: true, name: true, nameEn: true, role: true, email: true } },
     },
   });
   if (!sale) return res.status(404).json({ error: "الفاتورة غير موجودة" });

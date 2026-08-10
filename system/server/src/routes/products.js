@@ -21,6 +21,11 @@ import {
 import { scheduleInventoryWebhook } from "../lib/inventoryWebhook.js";
 import { writeAudit } from "../lib/auditLog.js";
 import { authMiddleware, requireRole, requirePermission } from "../middleware/auth.js";
+import {
+  PRODUCT_IMAGE_MAX_BYTES,
+  extractProductImageId,
+  productImagePublicPath,
+} from "../lib/productImageDb.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -34,12 +39,30 @@ const uploadExcel = multer({
   },
 });
 
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: PRODUCT_IMAGE_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(jpeg|png|webp|gif)$/i.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Only JPEG, PNG, WebP, or GIF images are allowed"));
+  },
+});
+
 function withResolvedImageUrl(product) {
   if (!product) return product;
   return {
     ...product,
     imageUrl: resolveStoredImageUrl(product.imageUrl),
   };
+}
+
+async function linkProductImage(orgId, productId, imageUrl) {
+  const imageId = extractProductImageId(imageUrl);
+  if (!imageId || !productId) return;
+  await prisma.productImage.updateMany({
+    where: { id: imageId, organizationId: orgId },
+    data: { productId },
+  });
 }
 
 async function resolveCatalogLinks(orgId, { categoryId, subcategoryId, sku, requireCatalogSku = true }) {
@@ -380,6 +403,76 @@ router.get("/", async (req, res) => {
   });
   res.json(products.map(withResolvedImageUrl));
 });
+
+/** Upload product image into the database (max 2 MB) → returns path for imageUrl */
+router.post(
+  "/upload-image",
+  requireRole("ADMIN", "MANAGER", "CASHIER"),
+  requirePermission("productsEdit"),
+  (req, res, next) => {
+    uploadImage.single("file")(req, res, (err) => {
+      if (err) {
+        const tooLarge = err.code === "LIMIT_FILE_SIZE";
+        return res.status(400).json({
+          error: tooLarge
+            ? "Image must be 2 MB or smaller"
+            : err.message || "Upload failed",
+          errorAr: tooLarge ? "يجب ألا يتجاوز حجم الصورة 2 ميغابايت" : err.message,
+          errorEn: tooLarge ? "Image must be 2 MB or smaller" : err.message || "Upload failed",
+        });
+      }
+      next();
+    });
+  },
+  async (req, res, next) => {
+    try {
+      if (!req.file?.buffer) {
+        return res.status(400).json({ error: "Image file is required (field name: file)" });
+      }
+      if (req.file.buffer.length > PRODUCT_IMAGE_MAX_BYTES) {
+        return res.status(400).json({
+          error: "Image must be 2 MB or smaller",
+          errorAr: "يجب ألا يتجاوز حجم الصورة 2 ميغابايت",
+          errorEn: "Image must be 2 MB or smaller",
+        });
+      }
+      const productIdRaw =
+        req.body?.productId != null && String(req.body.productId).trim()
+          ? String(req.body.productId).trim()
+          : null;
+      let productId = null;
+      if (productIdRaw) {
+        const p = await prisma.product.findFirst({
+          where: { id: productIdRaw, organizationId: req.user.organizationId },
+          select: { id: true },
+        });
+        if (!p) return res.status(400).json({ error: "Invalid productId" });
+        productId = p.id;
+      }
+      const created = await prisma.productImage.create({
+        data: {
+          organizationId: req.user.organizationId,
+          productId,
+          fileName: String(req.file.originalname || "image").slice(0, 180),
+          mimeType: String(req.file.mimetype || "image/jpeg").slice(0, 80),
+          size: req.file.buffer.length,
+          data: req.file.buffer,
+        },
+        select: { id: true, size: true, mimeType: true },
+      });
+      const url = productImagePublicPath(created.id);
+      res.status(201).json({
+        url,
+        id: created.id,
+        size: created.size,
+        mimeType: created.mimeType,
+      });
+    } catch (e) {
+      if (e?.status) return res.status(e.status).json({ error: e.message });
+      next(e);
+    }
+  }
+);
 
 /** توليد باركود رقمي غير مكرر ضمن المؤسسة (للمنتج الجديد أو عند تعبئة باركود لأول مرة) */
 router.get("/generate-barcode", requireRole("ADMIN", "MANAGER"), async (req, res, next) => {
@@ -826,6 +919,7 @@ router.post("/", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermission("
       minStockLevel: Math.max(0, Number(minStockLevel) || 5),
     },
   });
+  await linkProductImage(req.user.organizationId, product.id, imageTrim);
   res.status(201).json(withResolvedImageUrl(product));
 });
 
@@ -945,6 +1039,9 @@ router.patch("/:id", requireRole("ADMIN", "MANAGER", "CASHIER"), requirePermissi
       data: update,
       include: { inventories: true },
     });
+    if (update.imageUrl !== undefined) {
+      await linkProductImage(req.user.organizationId, p.id, update.imageUrl);
+    }
     const onlyActive =
       Object.keys(update).length === 1 && update.isActive !== undefined;
     await writeAudit({

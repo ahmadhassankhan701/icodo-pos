@@ -74,6 +74,38 @@ export async function apiBlob(path) {
   return res.blob();
 }
 
+/** رفع ملف صورة منتج (يُخزَّن في قاعدة البيانات) */
+export async function apiUploadImage(path, file, extraFields = {}) {
+  const token = getToken();
+  const fd = new FormData();
+  fd.append("file", file);
+  for (const [k, v] of Object.entries(extraFields || {})) {
+    if (v != null && String(v).trim() !== "") fd.append(k, String(v));
+  }
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: fd,
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text };
+  }
+  if (!res.ok) {
+    const err = new Error(resolveApiErrorMessage(data, res.statusText || "Upload failed"));
+    err.status = res.status;
+    err.data = data;
+    err.code = data?.code;
+    throw err;
+  }
+  return data;
+}
+
 /** رفع ملف Excel للاستيراد — branchId مطلوب في الاستعلام */
 export async function apiUploadExcel(path, file, branchId) {
   const token = getToken();
