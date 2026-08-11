@@ -70,6 +70,7 @@ export default function POS() {
   const [msg, setMsg] = useState("");
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [quickCustomerName, setQuickCustomerName] = useState("");
   const [discountInput, setDiscountInput] = useState("");
   const [taxPercent, setTaxPercent] = useState(() =>
@@ -558,6 +559,16 @@ export default function POS() {
       setMsg(t("pos.holdNeedItems"));
       return;
     }
+    if (paymentMethod === "ON_DELIVERY") {
+      if (!customerId) {
+        setMsg(t("pos.deliveryCustomerRequired"));
+        return;
+      }
+      if (!deliveryAddress.trim()) {
+        setMsg(t("pos.deliveryAddressRequired"));
+        return;
+      }
+    }
     const bid = branchId;
     if (!bid) return;
     setLoading(true);
@@ -566,7 +577,9 @@ export default function POS() {
         method: "POST",
         body: {
           branchId: bid,
-          label: holdLabel.trim() || undefined,
+          label:
+            holdLabel.trim() ||
+            (paymentMethod === "ON_DELIVERY" ? t("pos.deliveryHoldLabel") : undefined),
           items: items.map((i) => ({
             productId: i.productId,
             quantity: i.quantity,
@@ -578,18 +591,27 @@ export default function POS() {
           customerId: customerId || undefined,
           discountInput,
           taxPercent,
+          paymentMethod,
+          deliveryAddress: deliveryAddress.trim() || undefined,
+          guestPhone: guestPhoneInput.trim() || undefined,
+          tableNumber: tableNumber.trim() || undefined,
+          orderNote: orderNote.trim() || undefined,
         },
       });
       setHoldLabel("");
       clearCart();
       setCustomerId("");
+      setDeliveryAddress("");
       setDiscountInput("");
       setTaxPercent("0");
       setTableNumber("");
       setOrderNote("");
+      setGuestPhoneInput("");
       setSplitEnabled(false);
+      setPaymentMethod("CASH");
       await loadHeldCarts();
       await loadProducts();
+      setMsg(t("pos.holdSaved"));
     } catch (e) {
       setMsg(e.message || t("pos.saleFailed"));
     } finally {
@@ -606,8 +628,19 @@ export default function POS() {
     setCustomerId(typeof p.customerId === "string" ? p.customerId : "");
     setDiscountInput(p.discountInput != null ? String(p.discountInput) : "");
     setTaxPercent(p.taxPercent != null ? String(p.taxPercent) : "0");
-    setSplitEnabled(false);
+    setDeliveryAddress(typeof p.deliveryAddress === "string" ? p.deliveryAddress : "");
+    setGuestPhoneInput(typeof p.guestPhone === "string" ? p.guestPhone : "");
+    setTableNumber(typeof p.tableNumber === "string" ? p.tableNumber : "");
+    setOrderNote(typeof p.orderNote === "string" ? p.orderNote : "");
+    const pm = typeof p.paymentMethod === "string" ? p.paymentMethod.toUpperCase() : "";
+    if (PAYMENT_METHOD_IDS.includes(pm)) {
+      setPaymentMethod(pm);
+      setSplitEnabled(false);
+    } else {
+      setSplitEnabled(false);
+    }
     await loadProducts();
+    setMsg(t("pos.heldRestored"));
   };
 
   const deleteHeld = async (id) => {
@@ -640,6 +673,17 @@ export default function POS() {
     if (showCopilot && discountRisk && !discountRisk.canProceed) {
       setMsg(t("copilot.discountReasonNeeded", { pct: String(discountRisk.pct) }));
       return;
+    }
+
+    if (paymentMethod === "ON_DELIVERY" && !splitEnabled) {
+      if (!customerId) {
+        setMsg(t("pos.deliveryCustomerRequired"));
+        return;
+      }
+      if (!deliveryAddress.trim()) {
+        setMsg(t("pos.deliveryAddressRequired"));
+        return;
+      }
     }
 
     const tenderNeedsCashSession = (() => {
@@ -719,6 +763,9 @@ export default function POS() {
           : {}),
       })),
     };
+    if (paymentMethod === "ON_DELIVERY" && !splitEnabled && deliveryAddress.trim()) {
+      body.deliveryAddress = deliveryAddress.trim();
+    }
     if (showCafeExtras) {
       if (tableNumber.trim()) body.tableNumber = tableNumber.trim();
       if (orderNote.trim()) body.orderNote = orderNote.trim();
@@ -786,6 +833,7 @@ export default function POS() {
         setCopyDone(false);
         clearCart();
         setCustomerId("");
+        setDeliveryAddress("");
         setDiscountInput("");
         setDiscountReason("");
         setBarcodeMiss("");
@@ -822,6 +870,7 @@ export default function POS() {
       setCopyDone(false);
       clearCart();
       setCustomerId("");
+      setDeliveryAddress("");
       setDiscountInput("");
       setDiscountReason("");
       setBarcodeMiss("");
@@ -1142,7 +1191,14 @@ export default function POS() {
             <div style={{ fontWeight: 800, marginBottom: 8 }}>{t("pos.customer")}</div>
             <select
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value;
+                setCustomerId(id);
+                const c = customers.find((x) => x.id === id);
+                if (c?.address && String(c.address).trim()) {
+                  setDeliveryAddress(String(c.address).trim());
+                }
+              }}
               style={{
                 width: "100%",
                 minHeight: 44,
@@ -1162,6 +1218,29 @@ export default function POS() {
                 </option>
               ))}
             </select>
+            {paymentMethod === "ON_DELIVERY" && !splitEnabled ? (
+              <label style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                  {t("pos.deliveryAddress")} *
+                </span>
+                <textarea
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  placeholder={t("pos.deliveryAddressPh")}
+                  rows={2}
+                  required
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "var(--bg)",
+                    color: "var(--text)",
+                    resize: "vertical",
+                    fontSize: 16,
+                  }}
+                />
+              </label>
+            ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
               <input
                 placeholder={t("pos.quickCustomer")}
@@ -1187,7 +1266,13 @@ export default function POS() {
                   if (!name) return;
                   setMsg("");
                   try {
-                    const c = await api("/api/customers", { method: "POST", body: { name } });
+                    const c = await api("/api/customers", {
+                      method: "POST",
+                      body: {
+                        name,
+                        ...(deliveryAddress.trim() ? { address: deliveryAddress.trim() } : {}),
+                      },
+                    });
                     setCustomers((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
                     setCustomerId(c.id);
                     setQuickCustomerName("");
@@ -1480,14 +1565,26 @@ export default function POS() {
               </div>
             ) : null}
             {msg ? <div className="pos-checkout-dock__msg">{msg}</div> : null}
-            <button
-              type="button"
-              className="btn-touch pos-checkout-dock__btn"
-              disabled={loading || !items.length}
-              onClick={checkout}
-            >
-              {loading ? t("pos.processing") : t("pos.checkout")}
-            </button>
+            <div className="pos-checkout-dock__actions">
+              {paymentMethod === "ON_DELIVERY" && !splitEnabled ? (
+                <button
+                  type="button"
+                  className="btn-touch pos-checkout-dock__hold"
+                  disabled={loading || !items.length}
+                  onClick={holdCart}
+                >
+                  {loading ? t("pos.processing") : t("pos.holdCart")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn-touch pos-checkout-dock__btn"
+                disabled={loading || !items.length}
+                onClick={checkout}
+              >
+                {loading ? t("pos.processing") : t("pos.checkout")}
+              </button>
+            </div>
           </div>
         </div>
       </div>

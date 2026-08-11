@@ -41,7 +41,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, phone, email, notes, accountBalance } = req.body || {};
+  const { name, phone, email, notes, address, accountBalance } = req.body || {};
   const n = String(name || "").trim();
   if (!n) return res.status(400).json({ error: "الاسم مطلوب" });
 
@@ -62,6 +62,7 @@ router.post("/", async (req, res) => {
         phone: phone != null && String(phone).trim() ? String(phone).trim() : null,
         email: email != null && String(email).trim() ? String(email).trim() : null,
         notes: notes != null && String(notes).trim() ? String(notes).trim() : null,
+        address: address != null && String(address).trim() ? String(address).trim().slice(0, 500) : null,
         accountBalance: new Prisma.Decimal(opening),
       },
     });
@@ -85,16 +86,19 @@ router.post("/", async (req, res) => {
 });
 
 router.patch("/:id", requireRole("ADMIN", "MANAGER"), async (req, res) => {
-  const { name, phone, email, notes, accountBalance } = req.body || {};
+  const { name, phone, email, notes, address, accountBalance } = req.body || {};
   const data = {};
   if (name != null) {
     const n = String(name).trim();
     if (!n) return res.status(400).json({ error: "الاسم مطلوب" });
     data.name = n;
   }
-  if (phone !== undefined) data.phone = phone ? String(phone).trim() : null;
-  if (email !== undefined) data.email = email ? String(email).trim() : null;
-  if (notes !== undefined) data.notes = notes ? String(notes).trim() : null;
+  if (phone !== undefined) data.phone = phone != null && String(phone).trim() ? String(phone).trim() : null;
+  if (email !== undefined) data.email = email != null && String(email).trim() ? String(email).trim() : null;
+  if (notes !== undefined) data.notes = notes != null && String(notes).trim() ? String(notes).trim() : null;
+  if (address !== undefined) {
+    data.address = address != null && String(address).trim() ? String(address).trim().slice(0, 500) : null;
+  }
 
   let nextBalance = null;
   if (accountBalance !== undefined) {

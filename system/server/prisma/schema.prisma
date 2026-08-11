@@ -477,6 +477,8 @@ model Customer {
   phone          String?
   email          String?
   notes          String?
+  /// عنوان التوصيل الافتراضي (اختياري)
+  address        String?
   /// رصيد نقاط الولاء الحالي
   loyaltyPoints   Int          @default(0)
   /// مجموع المشتريات المؤهّلة (لنمط LIFETIME_SPEND)
@@ -1109,6 +1111,8 @@ model Sale {
   tableNumber      String?
   /// ملاحظات الطلب
   orderNote        String?
+  /// عنوان التوصيل (للبيع عند الاستلام)
+  deliveryAddress  String?
   createdAt        DateTime        @default(now())
   items            SaleItem[]
   refunds          Refund[]

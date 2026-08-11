@@ -139,6 +139,27 @@ router.post("/checkout", async (req, res) => {
   ) {
     return res.status(400).json({ error: "اختر عميلاً للبيع على الحساب (الآجل)" });
   }
+  if (pmSingle === "ON_DELIVERY" && (!customerId || !String(customerId).trim())) {
+    return res.status(400).json({
+      error: "اختر عميلاً للبيع عند الاستلام",
+      errorAr: "اختر عميلاً للبيع عند الاستلام",
+      errorEn: "Customer is required for cash on delivery",
+      code: "DELIVERY_CUSTOMER_REQUIRED",
+    });
+  }
+  const deliveryAddressRaw = req.body?.deliveryAddress;
+  const deliveryAddress =
+    deliveryAddressRaw != null && String(deliveryAddressRaw).trim()
+      ? String(deliveryAddressRaw).trim().slice(0, 500)
+      : null;
+  if (pmSingle === "ON_DELIVERY" && !deliveryAddress) {
+    return res.status(400).json({
+      error: "عنوان التوصيل مطلوب للبيع عند الاستلام",
+      errorAr: "عنوان التوصيل مطلوب للبيع عند الاستلام",
+      errorEn: "Delivery address is required for cash on delivery",
+      code: "DELIVERY_ADDRESS_REQUIRED",
+    });
+  }
 
   if (req.user.role !== "ADMIN" && req.user.branchId && req.user.branchId !== bid) {
     return res.status(403).json({ error: "لا يمكن البيع لفرع آخر" });
@@ -567,6 +588,7 @@ router.post("/checkout", async (req, res) => {
               : null,
           tableNumber,
           orderNote,
+          deliveryAddress,
           items: {
             create: lineData.map((l) => ({
               productId: l.productId,

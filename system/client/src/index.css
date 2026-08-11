@@ -2477,6 +2477,22 @@ a.app-sidebar-link.is-active .app-sidebar-badge {
   color: var(--danger);
 }
 
+.pos-checkout-dock__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.pos-checkout-dock__actions:has(.pos-checkout-dock__hold) {
+  grid-template-columns: 1fr 1.35fr;
+}
+.pos-checkout-dock__hold {
+  width: 100%;
+  min-height: 48px;
+  background: var(--surface2) !important;
+  color: var(--text) !important;
+  font-weight: 700;
+}
+
 .pos-checkout-dock__btn {
   width: 100%;
   background: linear-gradient(135deg, var(--checkout-btn-from), var(--checkout-btn-to)) !important;

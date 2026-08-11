@@ -57,6 +57,11 @@ export function InvoicePrint({ sale, branchName, taxInfo }) {
             : sale.user?.name || "—"}
           {sale.user?.email ? ` (${sale.user.email})` : ""}
         </div>
+        {sale.deliveryAddress ? (
+          <div>
+            {t("invoice.deliveryAddress")}: {sale.deliveryAddress}
+          </div>
+        ) : null}
         {sale.channel === "WHOLESALE" ? (
           <div style={{ fontWeight: 700, color: "#6d28d9" }}>{t("invoice.saleChannelWholesale")}</div>
         ) : null}

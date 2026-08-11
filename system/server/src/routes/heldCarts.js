@@ -86,6 +86,11 @@ router.post("/", async (req, res) => {
     discountInput,
     taxPercent,
     useWholesalePricing: useWholesaleRaw,
+    paymentMethod: paymentMethodRaw,
+    deliveryAddress: deliveryAddressRaw,
+    guestPhone: guestPhoneRaw,
+    tableNumber: tableNumberRaw,
+    orderNote: orderNoteRaw,
   } = req.body || {};
   const useWholesalePricing = Boolean(useWholesaleRaw);
   const bid = bodyBranch || req.user.branchId;
@@ -118,6 +123,26 @@ router.post("/", async (req, res) => {
         customerId != null && String(customerId).trim() ? String(customerId).trim() : "",
       discountInput: discountInput != null ? String(discountInput) : "",
       taxPercent: taxPercent != null ? String(taxPercent) : "0",
+      paymentMethod:
+        paymentMethodRaw != null && String(paymentMethodRaw).trim()
+          ? String(paymentMethodRaw).trim().toUpperCase().slice(0, 20)
+          : "",
+      deliveryAddress:
+        deliveryAddressRaw != null && String(deliveryAddressRaw).trim()
+          ? String(deliveryAddressRaw).trim().slice(0, 500)
+          : "",
+      guestPhone:
+        guestPhoneRaw != null && String(guestPhoneRaw).trim()
+          ? String(guestPhoneRaw).trim().slice(0, 40)
+          : "",
+      tableNumber:
+        tableNumberRaw != null && String(tableNumberRaw).trim()
+          ? String(tableNumberRaw).trim().slice(0, 40)
+          : "",
+      orderNote:
+        orderNoteRaw != null && String(orderNoteRaw).trim()
+          ? String(orderNoteRaw).trim().slice(0, 500)
+          : "",
     };
     const created = await prisma.heldCart.create({
       data: {
