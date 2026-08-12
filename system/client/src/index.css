@@ -410,48 +410,6 @@ html:not([data-theme="light"]) .dash-btn-primary {
   align-items: start;
 }
 
-.dash-layout--single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.dash-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0 0 1rem;
-  padding: 0.25rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface2, #f1f5f9) 88%, transparent);
-  border: 1px solid var(--border);
-  width: fit-content;
-  max-width: 100%;
-}
-
-.dash-tab {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 650;
-  padding: 0.55rem 1rem;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.dash-tab.is-active {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-}
-
-.dash-tab-hint {
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
 .dash-main-col,
 .dash-side-col {
   display: flex;
