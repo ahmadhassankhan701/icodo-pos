@@ -59,9 +59,11 @@ export function databaseUrlFingerprint() {
     }
     const hintFinal =
       hint ||
-      (isSupabase
+      (isSupabase && (!pgbouncer || !sslmode || (host.includes("pooler") && portNum === 5432))
         ? "إن استمر الخطأ: أعد لصق DATABASE_URL من Supabase (Database → Connect → Transaction pooler، منفذ 6543)، واحفظ المتغير في Vercel لبيئة Production ثم Redeploy."
-        : undefined);
+        : isSupabase
+          ? undefined
+          : undefined);
     return {
       databaseUrlSet: true,
       looksLikePostgresUri: true,

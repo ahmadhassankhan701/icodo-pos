@@ -73,65 +73,82 @@ export default function Dashboard() {
   useEffect(() => {
     const q = branchId ? `?branchId=${branchId}` : "";
     const run = async () => {
-      const [s, p, m, tp, tc, ts, se] = await Promise.all([
-        api(`/api/dashboard/summary${q}`),
-        api(`/api/dashboard/sales-by-product${q}`),
-        api(`/api/dashboard/monthly-profit${q}`),
+      // Load dashboard in small batches — parallel fan-out exhausts Supabase session pools.
+      const s = await api(`/api/dashboard/summary${q}`);
+      setSummary(s);
+      const p = await api(`/api/dashboard/sales-by-product${q}`);
+      setByProduct(p);
+      const m = await api(`/api/dashboard/monthly-profit${q}`);
+      setMonthly(m);
+      const [tp, tc] = await Promise.all([
         api(`/api/dashboard/top-products-month${q}`),
         api(`/api/dashboard/top-customers-month${q}`),
+      ]);
+      setTopProducts(Array.isArray(tp) ? tp : []);
+      setTopCustomers(Array.isArray(tc) ? tc : []);
+      const [ts, se] = await Promise.all([
         api(`/api/dashboard/top-services-month${q}`),
         api(`/api/dashboard/sales-by-employees-month${q}`),
       ]);
-      setSummary(s);
-      setByProduct(p);
-      setMonthly(m);
-      setTopProducts(Array.isArray(tp) ? tp : []);
-      setTopCustomers(Array.isArray(tc) ? tc : []);
       setTopServices(Array.isArray(ts) ? ts : []);
       setSalesByEmployees(Array.isArray(se) ? se : []);
       if (branchId) {
-        api(`/api/purchases/reorder-recommendations?branchId=${encodeURIComponent(branchId)}&lookbackDays=30&targetStockDays=21`)
-          .then((res) => {
-            const rows = Array.isArray(res?.recommendations) ? res.recommendations : [];
-            setReorderSuggestions(rows.slice(0, 8));
-          })
-          .catch(() => setReorderSuggestions([]));
+        try {
+          const res = await api(
+            `/api/purchases/reorder-recommendations?branchId=${encodeURIComponent(branchId)}&lookbackDays=30&targetStockDays=21`,
+          );
+          const rows = Array.isArray(res?.recommendations) ? res.recommendations : [];
+          setReorderSuggestions(rows.slice(0, 8));
+        } catch {
+          setReorderSuggestions([]);
+        }
         if (showWaste) {
-          api(`/api/intelligence/waste?branchId=${encodeURIComponent(branchId)}&withinDays=14`)
-            .then((res) => {
-              const rows = Array.isArray(res?.items) ? res.items : [];
-              setWasteSuggestions(rows.slice(0, 5));
-            })
-            .catch(() => setWasteSuggestions([]));
+          try {
+            const res = await api(
+              `/api/intelligence/waste?branchId=${encodeURIComponent(branchId)}&withinDays=14`,
+            );
+            const rows = Array.isArray(res?.items) ? res.items : [];
+            setWasteSuggestions(rows.slice(0, 5));
+          } catch {
+            setWasteSuggestions([]);
+          }
         } else {
           setWasteSuggestions([]);
         }
         if (showPriceBrain && (user?.role === "ADMIN" || user?.role === "MANAGER")) {
-          api(`/api/intelligence/pricing/markdowns?branchId=${encodeURIComponent(branchId)}&withinDays=14`)
-            .then((res) => {
-              const rows = Array.isArray(res?.items) ? res.items : [];
-              setPricingSuggestions(rows.slice(0, 5));
-            })
-            .catch(() => setPricingSuggestions([]));
+          try {
+            const res = await api(
+              `/api/intelligence/pricing/markdowns?branchId=${encodeURIComponent(branchId)}&withinDays=14`,
+            );
+            const rows = Array.isArray(res?.items) ? res.items : [];
+            setPricingSuggestions(rows.slice(0, 5));
+          } catch {
+            setPricingSuggestions([]);
+          }
         } else {
           setPricingSuggestions([]);
         }
         if (showOwnerBrief && (user?.role === "ADMIN" || user?.role === "MANAGER")) {
-          api(`/api/intelligence/brief/teaser?branchId=${encodeURIComponent(branchId)}`)
-            .then((res) => setOwnerBriefTeaser(res || null))
-            .catch(() => setOwnerBriefTeaser(null));
+          try {
+            const res = await api(
+              `/api/intelligence/brief/teaser?branchId=${encodeURIComponent(branchId)}`,
+            );
+            setOwnerBriefTeaser(res || null);
+          } catch {
+            setOwnerBriefTeaser(null);
+          }
         } else {
           setOwnerBriefTeaser(null);
         }
-        if (
-          showCostBrain &&
-          (user?.role === "ADMIN" || user?.role === "MANAGER")
-        ) {
-          api(
-            `/api/intelligence/cost/overview?branchId=${encodeURIComponent(branchId)}&lookbackDays=90`,
-          )
-            .then((res) => setCostTeaser(res || null))
-            .catch(() => setCostTeaser(null));
+        if (showCostBrain && (user?.role === "ADMIN" || user?.role === "MANAGER")) {
+          try {
+            const res = await api(
+              `/api/intelligence/cost/overview?branchId=${encodeURIComponent(branchId)}&lookbackDays=90`,
+            );
+            setCostTeaser(res || null);
+          } catch {
+            setCostTeaser(null);
+          }
         } else {
           setCostTeaser(null);
         }
