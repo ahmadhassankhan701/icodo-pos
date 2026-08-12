@@ -47,7 +47,12 @@ export function databaseUrlFingerprint() {
         "الاتصال المباشر db.*.supabase.co:5432 غالباً IPv6؛ Vercel غالباً IPv4 فيفشل الاتصال. في Supabase: Database → Connect → استخدم Transaction pooler (منفذ 6543، مضيف *.pooler.supabase.com) والصقه في DATABASE_URL مع ?pgbouncer=true&connection_limit=1&sslmode=require (انقل كلمة المرور بنفس الترميز). أو فعّل IPv4 add-on في Supabase.";
     } else if (!pgbouncer && host.includes("pooler")) {
       hint =
-        "مضيف pooler: أضف ?pgbouncer=true (أو &pgbouncer=true) — راجع Prisma + Supabase.";
+        portNum === 6543
+          ? "Transaction pooler (6543): أضف ?pgbouncer=true&connection_limit=1&sslmode=require — مطلوب لـ Prisma."
+          : "Session pooler (5432): إما أضف &pgbouncer=true&connection_limit=1، أو الأفضل انسخ Transaction pooler من Supabase (منفذ 6543) لتجنب EMAXCONNSESSION / نفاد جلسات الـ pool.";
+    } else if (host.includes("pooler") && portNum === 5432) {
+      hint =
+        "أنت على Session pooler (5432). إن ظهر max clients / EMAXCONNSESSION، بدّل DATABASE_URL إلى Transaction pooler منفذ 6543 مع pgbouncer=true&connection_limit=1.";
     } else if (isSupabase && !sslmode) {
       hint =
         "جرّب إلحاق &sslmode=require (أو ?sslmode=require) إن فشل الاتصال من Vercel.";
