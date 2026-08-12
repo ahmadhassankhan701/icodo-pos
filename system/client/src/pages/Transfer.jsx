@@ -21,6 +21,7 @@ export default function Transfer() {
   const [products, setProducts] = useState([]);
   const [lines, setLines] = useState([{ productId: "", quantity: "1" }]);
   const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
   const canSubmit = can("transfer");
 
   useEffect(() => {
@@ -61,6 +62,7 @@ export default function Transfer() {
       setMsg(t("returns.needLines"));
       return;
     }
+    setBusy(true);
     try {
       await api("/api/inventory/transfer", {
         method: "POST",
@@ -70,6 +72,8 @@ export default function Transfer() {
       setMsg(t("transfer.done"));
     } catch (x) {
       setMsg(x.message || t("transfer.failed"));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -151,8 +155,13 @@ export default function Transfer() {
           {t("returns.addLine")}
         </button>
         {canSubmit ? (
-          <button type="submit" className="btn-touch" style={{ background: "var(--accent)", color: "#fff", maxWidth: 280 }}>
-            {t("transfer.submit")}
+          <button
+            type="submit"
+            className="btn-touch"
+            disabled={busy}
+            style={{ background: "var(--accent)", color: "#fff", maxWidth: 280 }}
+          >
+            {busy ? t("common.loading") : t("transfer.submit")}
           </button>
         ) : (
           <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>{t("transfer.noPermission")}</p>

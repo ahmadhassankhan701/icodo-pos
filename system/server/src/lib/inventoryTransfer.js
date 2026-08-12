@@ -70,38 +70,45 @@ export async function executeInventoryTransfer({
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    for (const { productId, qty } of prep) {
-      const src = await tx.inventory.findUnique({
-        where: { productId_branchId: { productId, branchId: from } },
-      });
-      if (!src || src.quantity < qty) {
-        const p = await tx.product.findFirst({ where: { id: productId } });
-        throw new Error(`كمية غير كافية: ${p?.name || productId}`);
-      }
-      await tx.inventory.update({
-        where: { productId_branchId: { productId, branchId: from } },
-        data: { quantity: { decrement: qty } },
-      });
-      await tx.inventory.upsert({
-        where: { productId_branchId: { productId, branchId: to } },
-        create: {
+  await prisma.$transaction(
+    async (tx) => {
+      for (const { productId, qty } of prep) {
+        const src = await tx.inventory.findUnique({
+          where: { productId_branchId: { productId, branchId: from } },
+        });
+        if (!src || src.quantity < qty) {
+          const p = await tx.product.findFirst({ where: { id: productId } });
+          const err = new Error(`كمية غير كافية: ${p?.name || productId}`);
+          err.status = 400;
+          err.errorAr = err.message;
+          err.errorEn = `Insufficient quantity: ${p?.name || productId}`;
+          throw err;
+        }
+        await tx.inventory.update({
+          where: { productId_branchId: { productId, branchId: from } },
+          data: { quantity: { decrement: qty } },
+        });
+        await tx.inventory.upsert({
+          where: { productId_branchId: { productId, branchId: to } },
+          create: {
+            productId,
+            branchId: to,
+            quantity: qty,
+            minStockLevel: 5,
+          },
+          update: { quantity: { increment: qty } },
+        });
+        await moveLotsBetweenBranches(tx, {
+          orgId,
+          fromBranchId: from,
+          toBranchId: to,
           productId,
-          branchId: to,
           quantity: qty,
-          minStockLevel: 5,
-        },
-        update: { quantity: { increment: qty } },
-      });
-      await moveLotsBetweenBranches(tx, {
-        orgId,
-        fromBranchId: from,
-        toBranchId: to,
-        productId,
-        quantity: qty,
-      });
-    }
-  });
+        });
+      }
+    },
+    { maxWait: 15000, timeout: 60000 },
+  );
 
   await writeAudit({
     userId,

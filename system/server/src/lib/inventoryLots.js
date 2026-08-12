@@ -11,6 +11,14 @@ export function sortLotsForFefo(a, b) {
   return ar - br;
 }
 
+async function resolveInventoryId(tx, { productId, branchId }) {
+  const inv = await tx.inventory.findUnique({
+    where: { productId_branchId: { productId, branchId } },
+    select: { id: true },
+  });
+  return inv?.id ?? null;
+}
+
 /**
  * Consume qty from branch lots (FEFO). Throws if lots cannot cover.
  * @returns {Promise<Array<{ lotId: string, quantity: number, expiryDate: Date|null, unitCost: unknown, receivedAt: Date }>>}
@@ -54,7 +62,11 @@ export async function consumeLotsFefo(tx, { orgId, branchId, productId, quantity
     needed -= take;
   }
   if (needed > 0) {
-    throw new Error("كميات الدفعات غير كافية للمخزون المطلوب");
+    const err = new Error("كميات الدفعات غير كافية للمخزون المطلوب");
+    err.status = 400;
+    err.errorAr = err.message;
+    err.errorEn = "Lot quantities are insufficient for the requested stock";
+    throw err;
   }
   return taken;
 }
@@ -71,6 +83,11 @@ export async function moveLotsBetweenBranches(
   const qty = Math.max(0, Math.floor(Number(quantity) || 0));
   if (qty <= 0) return;
 
+  const destInventoryId = await resolveInventoryId(tx, {
+    productId,
+    branchId: toBranchId,
+  });
+
   const lotSum = await tx.inventoryLot.aggregate({
     where: {
       organizationId: orgId,
@@ -83,12 +100,12 @@ export async function moveLotsBetweenBranches(
   const availableLots = Number(lotSum._sum.quantityOnHand || 0);
 
   if (availableLots <= 0) {
-    // Aggregate stock without lots — create dest adjustment lot for traceability.
     await tx.inventoryLot.create({
       data: {
         organizationId: orgId,
         productId,
         branchId: toBranchId,
+        inventoryId: destInventoryId,
         receivedAt: new Date(),
         expiryDate: null,
         quantityReceived: qty,
@@ -114,6 +131,7 @@ export async function moveLotsBetweenBranches(
         organizationId: orgId,
         productId,
         branchId: toBranchId,
+        inventoryId: destInventoryId,
         receivedAt: new Date(),
         expiryDate: t.expiryDate,
         quantityReceived: t.quantity,
@@ -124,7 +142,6 @@ export async function moveLotsBetweenBranches(
     });
   }
 
-  // Remainder of aggregate move with no lot cover → dest adjustment lot
   const remainder = qty - moveQty;
   if (remainder > 0) {
     await tx.inventoryLot.create({
@@ -132,6 +149,7 @@ export async function moveLotsBetweenBranches(
         organizationId: orgId,
         productId,
         branchId: toBranchId,
+        inventoryId: destInventoryId,
         receivedAt: new Date(),
         expiryDate: null,
         quantityReceived: remainder,
@@ -165,11 +183,13 @@ export async function ensureLotsCoverQuantity(
   const available = Number(lotSum._sum.quantityOnHand || 0);
   const gap = needed - available;
   if (gap <= 0) return;
+  const inventoryId = await resolveInventoryId(tx, { productId, branchId });
   await tx.inventoryLot.create({
     data: {
       organizationId: orgId,
       productId,
       branchId,
+      inventoryId,
       receivedAt: new Date(),
       expiryDate: null,
       quantityReceived: gap,
@@ -206,11 +226,13 @@ export async function syncLotsToTargetQuantity(tx, { orgId, branchId, productId,
     return;
   }
   const add = target - current;
+  const inventoryId = await resolveInventoryId(tx, { productId, branchId });
   await tx.inventoryLot.create({
     data: {
       organizationId: orgId,
       productId,
       branchId,
+      inventoryId,
       receivedAt: new Date(),
       expiryDate: null,
       quantityReceived: add,

@@ -5,6 +5,11 @@ import { prisma } from "../lib/prisma.js";
 import { httpError, sendError } from "../lib/apiError.js";
 import { clampInt } from "../lib/smartInventory.js";
 import { buildBriefTeaser, buildDailyBrief } from "../lib/ownerBrief.js";
+import {
+  dbUnavailableMessage,
+  dbUnavailableMessageEn,
+  isDbUnavailableError,
+} from "../lib/dbErrors.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -53,6 +58,11 @@ router.get("/daily", requireRole("ADMIN", "MANAGER"), async (req, res) => {
     if (e?.status) {
       return sendError(res, e.status, e.errorAr || e.message, e.errorEn || e.message);
     }
+    if (isDbUnavailableError(e)) {
+      return sendError(res, 503, dbUnavailableMessage, dbUnavailableMessageEn, {
+        code: "DB_UNAVAILABLE",
+      });
+    }
     console.error(e);
     return sendError(res, 500, "تعذر بناء الموجز اليومي", "Could not build daily brief");
   }
@@ -74,6 +84,11 @@ router.get("/teaser", requireRole("ADMIN", "MANAGER"), async (req, res) => {
   } catch (e) {
     if (e?.status) {
       return sendError(res, e.status, e.errorAr || e.message, e.errorEn || e.message);
+    }
+    if (isDbUnavailableError(e)) {
+      return sendError(res, 503, dbUnavailableMessage, dbUnavailableMessageEn, {
+        code: "DB_UNAVAILABLE",
+      });
     }
     console.error(e);
     return sendError(res, 500, "تعذر تحميل موجز المالك", "Could not load owner teaser");

@@ -26,14 +26,22 @@ export function resolveApiErrorMessage(data, fallback = "Request failed") {
 }
 
 export async function api(path, options = {}) {
-  const headers = { ...options.headers };
+  const headers = new Headers(options.headers || {});
   const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (options.body && typeof options.body === "object" && !(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify(options.body);
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  let body = options.body;
+  if (body && typeof body === "object" && !(body instanceof FormData)) {
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    body = JSON.stringify(body);
+  }
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers,
+    body,
+    credentials: options.credentials ?? "same-origin",
+  });
   const text = await res.text();
   let data = null;
   try {

@@ -269,11 +269,20 @@ export function AppLayout() {
               <span>{t("nav.pos")}</span>
             </NavLink>
           ) : null}
+          {/* Floor associate POS — coming soon (ASSOCIATE role still uses /floor-pos) */}
           {can("floorPos") ? (
-            <NavLink to="/floor-pos" className={sidebarLinkClass} end>
+            <span
+              className="app-sidebar-link"
+              style={{ opacity: 0.55, cursor: "default" }}
+              title={t("common.comingSoon")}
+              aria-disabled="true"
+            >
               <SidebarIcon name="pos" />
-              <span>{t("nav.floorPos")}</span>
-            </NavLink>
+              <span>
+                {t("nav.floorPos")}{" "}
+                <small style={{ fontWeight: 600 }}>({t("common.comingSoon")})</small>
+              </span>
+            </span>
           ) : null}
 
           <SidebarNavSection
@@ -433,10 +442,18 @@ export function AppLayout() {
               </NavLink>
             ) : null}
             {isAdmin || isManager ? (
-              <NavLink to="/automations" className={sidebarLinkClass}>
+              <span
+                className="app-sidebar-link"
+                style={{ opacity: 0.55, cursor: "default" }}
+                title={t("common.comingSoon")}
+                aria-disabled="true"
+              >
                 <SidebarIcon name="automations" />
-                <span>{t("nav.automations")}</span>
-              </NavLink>
+                <span>
+                  {t("nav.automations")}{" "}
+                  <small style={{ fontWeight: 600 }}>({t("common.comingSoon")})</small>
+                </span>
+              </span>
             ) : null}
             {isAdmin || isManager ? (
               <NavLink to="/hr" className={sidebarLinkClass}>
@@ -473,10 +490,18 @@ export function AppLayout() {
               </NavLink>
             ) : null}
             {isAdmin || isManager ? (
-              <NavLink to="/sync" className={sidebarLinkClass}>
+              <span
+                className="app-sidebar-link"
+                style={{ opacity: 0.55, cursor: "default" }}
+                title={t("common.comingSoon")}
+                aria-disabled="true"
+              >
                 <SidebarIcon name="websiteSync" />
-                <span>{t("nav.sync")}</span>
-              </NavLink>
+                <span>
+                  {t("nav.sync")}{" "}
+                  <small style={{ fontWeight: 600 }}>({t("common.comingSoon")})</small>
+                </span>
+              </span>
             ) : null}
             {isAdmin ? (
               <NavLink to="/plan" className={sidebarLinkClass}>

@@ -65,7 +65,8 @@ router.get(
       targetStockDays,
       wasteWithinDays,
     });
-    res.json(overview);
+    const { _wasteBoard, ...safe } = overview;
+    res.json(safe);
   },
 );
 

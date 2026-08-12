@@ -23,7 +23,7 @@ function paymentLabel(t, method) {
 
 export default function CustomerReceivables() {
   const { t, locale } = useI18n();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { classFor } = usePrintSettings();
   const branchId = useActiveBranchId();
@@ -36,6 +36,7 @@ export default function CustomerReceivables() {
   const [printBusyId, setPrintBusyId] = useState("");
 
   const load = useCallback(async () => {
+    if (authLoading || !user) return;
     setMsg("");
     setLoading(true);
     try {
@@ -49,13 +50,17 @@ export default function CustomerReceivables() {
       setTxns(Array.isArray(transactions) ? transactions : []);
       setDebts(Array.isArray(debtList) ? debtList : []);
     } catch (e) {
-      setMsg(e.message || t("receivable.loadError"));
+      if (e?.status === 401) {
+        setMsg(t("accounts.needLogin"));
+      } else {
+        setMsg(e.message || t("receivable.loadError"));
+      }
       setTxns([]);
       setDebts([]);
     } finally {
       setLoading(false);
     }
-  }, [branchId, t]);
+  }, [authLoading, user, branchId, t]);
 
   useEffect(() => {
     load();
@@ -92,8 +97,14 @@ export default function CustomerReceivables() {
           <h1 className="accounts-page__title">{t("nav.accounts")}</h1>
           <p className="accounts-page__intro">{t("accounts.intro")}</p>
         </div>
-        <button type="button" className="btn-touch" style={{ background: "var(--surface2)" }} onClick={() => load()}>
-          {t("pos.refresh")}
+        <button
+          type="button"
+          className="btn-touch"
+          style={{ background: "var(--surface2)" }}
+          onClick={() => load()}
+          disabled={loading || authLoading}
+        >
+          {loading ? t("common.loading") : t("pos.refresh")}
         </button>
       </header>
 

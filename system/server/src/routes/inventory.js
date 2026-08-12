@@ -12,6 +12,11 @@ import {
   syncLotsToTargetQuantity,
 } from "../lib/inventoryLots.js";
 import { executeInventoryTransfer } from "../lib/inventoryTransfer.js";
+import {
+  dbUnavailableMessage,
+  dbUnavailableMessageEn,
+  isDbUnavailableError,
+} from "../lib/dbErrors.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -108,6 +113,14 @@ router.get("/lots", requirePermission("productsView"), async (req, res) => {
 
     res.json({ lots: mapped });
   } catch (e) {
+    if (isDbUnavailableError(e)) {
+      return res.status(503).json({
+        error: dbUnavailableMessage,
+        errorAr: dbUnavailableMessage,
+        errorEn: dbUnavailableMessageEn,
+        code: "DB_UNAVAILABLE",
+      });
+    }
     const msg = e instanceof Error ? e.message : "فشل تحميل الدفعات";
     res.status(400).json({ error: msg });
   }

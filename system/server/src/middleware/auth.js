@@ -1,6 +1,11 @@
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { hasPermission, resolveRolePermissions } from "../lib/permissions.js";
+import {
+  dbUnavailableMessage,
+  dbUnavailableMessageEn,
+  isDbUnavailableError,
+} from "../lib/dbErrors.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -9,20 +14,35 @@ export function signToken(payload) {
 }
 
 export function authMiddleware(req, res, next) {
-  const header = req.headers.authorization;
+  const header = req.headers.authorization || req.headers.Authorization;
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) {
-    return res.status(401).json({ error: "يجب تسجيل الدخول" });
+    return res.status(401).json({
+      error: "يجب تسجيل الدخول",
+      errorAr: "يجب تسجيل الدخول",
+      errorEn: "Please sign in",
+      code: "UNAUTHENTICATED",
+    });
   }
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     if (!payload.organizationId) {
-      return res.status(401).json({ error: "انتهت الجلسة — سجّل الدخول مجدداً" });
+      return res.status(401).json({
+        error: "انتهت الجلسة — سجّل الدخول مجدداً",
+        errorAr: "انتهت الجلسة — سجّل الدخول مجدداً",
+        errorEn: "Session expired — please sign in again",
+        code: "SESSION_EXPIRED",
+      });
     }
     req.user = payload;
     next();
   } catch {
-    return res.status(401).json({ error: "جلسة غير صالحة" });
+    return res.status(401).json({
+      error: "جلسة غير صالحة",
+      errorAr: "جلسة غير صالحة",
+      errorEn: "Invalid session",
+      code: "INVALID_TOKEN",
+    });
   }
 }
 
@@ -68,6 +88,14 @@ export function requirePermission(...keys) {
       }
       next();
     } catch (e) {
+      if (isDbUnavailableError(e)) {
+        return res.status(503).json({
+          error: dbUnavailableMessage,
+          errorAr: dbUnavailableMessage,
+          errorEn: dbUnavailableMessageEn,
+          code: "DB_UNAVAILABLE",
+        });
+      }
       next(e);
     }
   };

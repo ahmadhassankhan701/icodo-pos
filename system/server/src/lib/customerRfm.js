@@ -50,6 +50,7 @@ export async function buildCustomerRfm({
   since.setDate(since.getDate() - lookback);
   const now = new Date();
 
+  // Cap customer pull; RFM boards only need a bounded set for scoring lists.
   const customers = await prisma.customer.findMany({
     where: { organizationId: orgId },
     select: {
@@ -61,36 +62,32 @@ export async function buildCustomerRfm({
       loyaltyPoints: true,
       createdAt: true,
     },
+    orderBy: { lifetimeSpend: "desc" },
+    take: 5000,
   });
 
-  const sales = await prisma.sale.findMany({
+  // Aggregate in DB instead of loading every sale row into memory.
+  const salesAgg = await prisma.sale.groupBy({
+    by: ["customerId"],
     where: {
       customerId: { not: null },
       branch: { organizationId: orgId },
       createdAt: { gte: since },
     },
-    select: {
-      customerId: true,
-      total: true,
-      createdAt: true,
-    },
+    _count: { _all: true },
+    _sum: { total: true },
+    _max: { createdAt: true },
   });
 
   const byCustomer = new Map();
-  for (const s of sales) {
+  for (const s of salesAgg) {
     const id = s.customerId;
     if (!id) continue;
-    const cur = byCustomer.get(id) || {
-      frequency: 0,
-      monetary: 0,
-      lastPurchaseAt: null,
-    };
-    cur.frequency += 1;
-    cur.monetary = money(cur.monetary + Number(s.total || 0));
-    if (!cur.lastPurchaseAt || new Date(s.createdAt) > new Date(cur.lastPurchaseAt)) {
-      cur.lastPurchaseAt = s.createdAt;
-    }
-    byCustomer.set(id, cur);
+    byCustomer.set(id, {
+      frequency: Number(s._count?._all || 0),
+      monetary: money(s._sum?.total || 0),
+      lastPurchaseAt: s._max?.createdAt || null,
+    });
   }
 
   const recencyDaysList = [];
@@ -103,7 +100,6 @@ export async function buildCustomerRfm({
       monetary: money(c.lifetimeSpend || 0),
       lastPurchaseAt: null,
     };
-    // Prefer lifetime if lookback monetary is empty but lifetime exists
     const monetary = agg.frequency > 0 ? agg.monetary : money(c.lifetimeSpend || 0);
     const daysSince =
       agg.lastPurchaseAt != null ? daysBetween(agg.lastPurchaseAt, now) : null;
@@ -125,7 +121,7 @@ export async function buildCustomerRfm({
     };
   });
 
-  const recSorted = [...recencyDaysList].sort((a, b) => a - b); // lower days = better
+  const recSorted = [...recencyDaysList].sort((a, b) => a - b);
   const freqSorted = [...freqList].sort((a, b) => a - b);
   const monSorted = [...monList].sort((a, b) => a - b);
 
@@ -185,16 +181,11 @@ export async function buildCustomerRfm({
   const atRisk = scored.filter((r) => r.segment === "AT_RISK").slice(0, lim);
   const champions = scored.filter((r) => r.segment === "CHAMPIONS").slice(0, lim);
 
-  const shareLines = (list, locale = "ar") =>
+  const shareLines = (list) =>
     list
       .filter((c) => c.phone)
       .slice(0, 100)
-      .map((c) => {
-        if (locale === "en") {
-          return `${c.phone}\t${c.name}\t${c.segment}\t${c.monetary}`;
-        }
-        return `${c.phone}\t${c.name}\t${c.segment}\t${c.monetary}`;
-      });
+      .map((c) => `${c.phone}\t${c.name}\t${c.segment}\t${c.monetary}`);
 
   return {
     lookbackDays: lookback,
@@ -209,10 +200,10 @@ export async function buildCustomerRfm({
     champions,
     customers: scored.slice(0, lim),
     shareText: {
-      dormantAr: shareLines(dormantList, "ar").join("\n"),
-      dormantEn: shareLines(dormantList, "en").join("\n"),
-      highValueAr: shareLines(highValue, "ar").join("\n"),
-      highValueEn: shareLines(highValue, "en").join("\n"),
+      dormantAr: shareLines(dormantList).join("\n"),
+      dormantEn: shareLines(dormantList).join("\n"),
+      highValueAr: shareLines(highValue).join("\n"),
+      highValueEn: shareLines(highValue).join("\n"),
     },
   };
 }

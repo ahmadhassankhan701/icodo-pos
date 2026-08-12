@@ -20,7 +20,7 @@ export function isDbUnavailableError(e) {
   }
   const msg = String(e.message || "");
   if (
-    /P1001|P1000|P1017|P2024|Can't reach database server|connection (refused|timed out|closed)|Server has closed the connection|database server is running|Timed out fetching a new connection from the connection pool/i.test(
+    /P1001|P1000|P1017|P2024|EMAXCONNSESSION|max clients reached|Can't reach database server|connection (refused|timed out|closed)|Server has closed the connection|database server is running|Timed out fetching a new connection from the connection pool|Error in connector/i.test(
       msg
     )
   ) {
@@ -30,7 +30,10 @@ export function isDbUnavailableError(e) {
 }
 
 export const dbUnavailableMessage =
-  "قاعدة البيانات غير متاحة مؤقتاً أو انتهت مهلة الاتصال. أعد المحاولة بعد لحظات. على الإنتاج تحقق من DATABASE_URL (مثلاً رابط الـ pooler في Supabase).";
+  "قاعدة البيانات غير متاحة مؤقتاً أو انتهت مهلة الاتصال. أعد المحاولة بعد لحظات. على الإنتاج تحقق من DATABASE_URL (مثلاً Transaction pooler مع pgbouncer=true وconnection_limit=1).";
+
+export const dbUnavailableMessageEn =
+  "Database is temporarily unavailable or the connection pool is exhausted. Retry shortly. On production use the Supabase Transaction pooler (port 6543) with pgbouncer=true&connection_limit=1.";
 
 /** جدول/عمود مفقود — غالباً ترحيلات Prisma لم تُطبَّق أو توقفت بحالة خطأ */
 const SCHEMA_DRIFT_CODES = new Set(["P2021", "P2022"]);

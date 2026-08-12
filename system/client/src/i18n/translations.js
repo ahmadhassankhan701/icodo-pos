@@ -2,6 +2,14 @@
 
 const entries = [
   ["common.loading", "جاري التحميل...", "Loading..."],
+  ["common.comingSoon", "قريباً", "Coming soon"],
+  ["common.comingSoonBlurb", "هذه الميزة قيد التجهيز وستكون متاحة قريباً.", "This feature is being prepared and will be available soon."],
+  ["comingSoon.automations", "الأتمتة والتذكيرات قيد الإعداد وستكون متاحة قريباً.", "Automations and reminders are being prepared and will be available soon."],
+  ["comingSoon.sync", "ربط الموقع الخارجي قيد الإعداد وسيكون متاحاً قريباً.", "Website sync is being prepared and will be available soon."],
+  ["comingSoon.floorPos", "بيع أرضية المتجر للمساعدين قيد الإعداد وسيكون متاحاً قريباً.", "Floor associate sales is being prepared and will be available soon."],
+  ["accounts.needLogin", "انتهت الجلسة — سجّل الدخول مجدداً.", "Session expired — please sign in again."],
+  ["stockBalancer.switchToSee", "بدّل إلى فرع {{branch}} لرؤية المخزون المحدّث", "Switch to {{branch}} to see updated stock"],
+  ["stockBalancer.switchBranch", "التبديل إلى فرع الوجهة", "Switch to destination branch"],
   ["common.save", "حفظ", "Save"],
   ["common.cancel", "إلغاء", "Cancel"],
   ["common.close", "إغلاق", "Close"],

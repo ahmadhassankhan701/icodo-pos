@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useI18n } from "../context/LanguageContext.jsx";
 import { useOrgCurrency } from "../lib/orgCurrency.js";
+import { useBranchContext } from "../context/BranchContext.jsx";
 import { EmptyState } from "../components/EmptyState.jsx";
 import { productDisplayName } from "../utils/productName.js";
 
@@ -33,6 +34,7 @@ function Kpi({ label, value, hint }) {
 export default function StockBalancer() {
   const { t, locale } = useI18n();
   const { format: cur } = useOrgCurrency();
+  const { setActiveBranchId } = useBranchContext();
   const [lookbackDays, setLookbackDays] = useState("30");
   const [overview, setOverview] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
@@ -42,6 +44,7 @@ export default function StockBalancer() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const [switchHint, setSwitchHint] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,12 +53,18 @@ export default function StockBalancer() {
       const q = new URLSearchParams({
         lookbackDays: String(Math.max(7, Number(lookbackDays) || 30)),
       });
-      const [ov, sug] = await Promise.all([
-        api(`/api/intelligence/balancer/overview?${q}`),
-        api(`/api/intelligence/balancer/suggestions?${q}`),
-      ]);
-      setOverview(ov);
-      setSuggestions(Array.isArray(sug?.suggestions) ? sug.suggestions : []);
+      // Single request — overview previously duplicated the same heavy scan.
+      const sug = await api(`/api/intelligence/balancer/suggestions?${q}`);
+      const list = Array.isArray(sug?.suggestions) ? sug.suggestions : [];
+      setSuggestions(list);
+      setOverview({
+        lookbackDays: sug?.lookbackDays,
+        branchCount: sug?.branchCount,
+        count: sug?.count ?? list.length,
+        critical: list.filter((s) => s.severity === "CRITICAL").length,
+        high: list.filter((s) => s.severity === "HIGH").length,
+        estimatedAvoidedPurchases: sug?.estimatedAvoidedPurchases ?? 0,
+      });
       setSelected({});
       setQtyOverride({});
     } catch (e) {
@@ -95,12 +104,29 @@ export default function StockBalancer() {
     setBusy(true);
     setErr("");
     setMsg("");
+    setSwitchHint(null);
     try {
       const res = await api("/api/intelligence/balancer/execute", {
         method: "POST",
         body: { lines: selectedLines },
       });
-      setMsg(t("stockBalancer.executed", { n: String(res?.transferCount || 1) }));
+      const destIds = [...new Set(selectedLines.map((l) => l.toBranchId).filter(Boolean))];
+      const destNames = [
+        ...new Set(
+          selectedLines
+            .map((l) => suggestions.find((s) => s.id && s.toBranchId === l.toBranchId)?.toBranchName)
+            .filter(Boolean),
+        ),
+      ];
+      setMsg(
+        t("stockBalancer.executed", { n: String(res?.transferCount || 1) }) +
+          (destNames.length
+            ? ` — ${t("stockBalancer.switchToSee", { branch: destNames.join(", ") })}`
+            : ""),
+      );
+      if (destIds.length === 1) {
+        setSwitchHint({ branchId: destIds[0], name: destNames[0] || destIds[0] });
+      }
       await load();
     } catch (e) {
       setErr(e?.message || t("stockBalancer.executeFailed"));
@@ -162,6 +188,23 @@ export default function StockBalancer() {
 
       {err ? <div className="card" style={{ padding: 12, color: "#b91c1c" }}>{err}</div> : null}
       {msg ? <div className="card" style={{ padding: 12, color: "#15803d" }}>{msg}</div> : null}
+      {switchHint ? (
+        <div className="card" style={{ padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ color: "var(--muted)", fontSize: 13 }}>
+            {t("stockBalancer.switchToSee", { branch: switchHint.name })}
+          </span>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => {
+              setActiveBranchId(switchHint.branchId);
+              setSwitchHint(null);
+            }}
+          >
+            {t("stockBalancer.switchBranch")}
+          </button>
+        </div>
+      ) : null}
 
       <div
         style={{

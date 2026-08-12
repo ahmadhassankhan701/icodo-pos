@@ -98,7 +98,7 @@ export default function InventoryLots() {
           onClick={() => setSearch(q.trim())}
           disabled={loading}
         >
-          {t("sales.search")}
+          {loading ? t("common.loading") : t("sales.search")}
         </button>
       </div>
 

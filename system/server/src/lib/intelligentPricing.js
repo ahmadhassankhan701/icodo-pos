@@ -105,8 +105,13 @@ export async function buildMarkdownSuggestions({
   branchId,
   withinDays = 14,
   minMarginPct = 5,
+  /** Optional preloaded waste board to avoid a duplicate lot scan. */
+  wasteBoard = null,
 }) {
-  const waste = await buildWasteBoard({ orgId, branchId, withinDays });
+  const waste =
+    wasteBoard && Array.isArray(wasteBoard.items)
+      ? wasteBoard
+      : await buildWasteBoard({ orgId, branchId, withinDays });
   const byProduct = new Map();
 
   for (const row of waste.items) {

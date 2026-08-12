@@ -3,6 +3,11 @@ import { authMiddleware, requireRole, requirePermission } from "../middleware/au
 import { sendError } from "../lib/apiError.js";
 import { clampInt } from "../lib/smartInventory.js";
 import { buildCustomerRfm, buildRfmOverview } from "../lib/customerRfm.js";
+import {
+  dbUnavailableMessage,
+  dbUnavailableMessageEn,
+  isDbUnavailableError,
+} from "../lib/dbErrors.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -10,6 +15,11 @@ router.use(authMiddleware);
 function handleErr(res, e, ar, en) {
   if (e?.status) {
     return sendError(res, e.status, e.errorAr || e.message, e.errorEn || e.message);
+  }
+  if (isDbUnavailableError(e)) {
+    return sendError(res, 503, dbUnavailableMessage, dbUnavailableMessageEn, {
+      code: "DB_UNAVAILABLE",
+    });
   }
   console.error(e);
   return sendError(res, 500, ar, en);

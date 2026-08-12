@@ -26,11 +26,11 @@ import Products from "./pages/Products.jsx";
 import Categories from "./pages/Categories.jsx";
 import Users from "./pages/Users.jsx";
 import Permissions from "./pages/Permissions.jsx";
-import Sync from "./pages/Sync.jsx";
 import Branches from "./pages/Branches.jsx";
 import Customers from "./pages/Customers.jsx";
 import CustomerReceivables from "./pages/CustomerReceivables.jsx";
 import CustomerAccountDetail from "./pages/CustomerAccountDetail.jsx";
+import ComingSoon from "./pages/ComingSoon.jsx";
 import Zakat from "./pages/Zakat.jsx";
 import Returns from "./pages/Returns.jsx";
 import Purchases from "./pages/Purchases.jsx";
@@ -54,7 +54,6 @@ import CustomersBrain from "./pages/CustomersBrain.jsx";
 const loadReports = () => import("./pages/Reports.jsx");
 const loadAppointments = () => import("./pages/Appointments.jsx");
 const loadAccounting = () => import("./pages/Accounting.jsx");
-const loadAutomations = () => import("./pages/Automations.jsx");
 const loadCommissions = () => import("./pages/Commissions.jsx");
 const loadHrLayout = () => import("./pages/hr/HrLayout.jsx");
 const loadHrEmployees = () => import("./pages/hr/HrEmployees.jsx");
@@ -71,7 +70,6 @@ const loadPlatformOnboardingDetail = () => import("./pages/PlatformOnboardingDet
 const Reports = React.lazy(loadReports);
 const Appointments = React.lazy(loadAppointments);
 const Accounting = React.lazy(loadAccounting);
-const Automations = React.lazy(loadAutomations);
 const Commissions = React.lazy(loadCommissions);
 const HrLayout = React.lazy(loadHrLayout);
 const HrEmployees = React.lazy(loadHrEmployees);
@@ -140,6 +138,13 @@ function ProtectedFloor({ children }) {
   return <Navigate to={getPostAuthPath(user)} replace />;
 }
 
+/** Floor POS stays live for ASSOCIATE; managers/admins see coming soon for now. */
+function ComingSoonFloorOrLive() {
+  const { user } = useAuth();
+  if (user?.role === "ASSOCIATE") return <FloorPos />;
+  return <ComingSoon titleKey="nav.floorPos" blurbKey="comingSoon.floorPos" />;
+}
+
 function PublicHome() {
   const { user, loading } = useAuth();
   if (loading) {
@@ -197,7 +202,7 @@ export default function App() {
         loadAppointments(),
       ]);
       if (user.role === "ADMIN" || user.role === "MANAGER") {
-        Promise.allSettled([loadAccounting(), loadAutomations(), loadCommissions()]);
+        Promise.allSettled([loadAccounting(), loadCommissions()]);
       }
       if (user.isPlatformAdmin) {
         Promise.allSettled([loadPlatformLayout(), loadPlatformOrganizations(), loadPlatformUsers()]);
@@ -294,7 +299,7 @@ export default function App() {
           path="/floor-pos"
           element={
             <ProtectedFloor>
-              <FloorPos />
+              <ComingSoonFloorOrLive />
             </ProtectedFloor>
           }
         />
@@ -374,7 +379,7 @@ export default function App() {
             path="/automations"
             element={
               <Protected roles={["ADMIN", "MANAGER"]}>
-                <Automations />
+                <ComingSoon titleKey="nav.automations" blurbKey="comingSoon.automations" />
               </Protected>
             }
           />
@@ -544,7 +549,7 @@ export default function App() {
             path="/sync"
             element={
               <Protected roles={["ADMIN", "MANAGER"]}>
-                <Sync />
+                <ComingSoon titleKey="nav.sync" blurbKey="comingSoon.sync" />
               </Protected>
             }
           />

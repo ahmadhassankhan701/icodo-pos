@@ -15,42 +15,48 @@ function roundMoney(n) {
 
 /** قائمة عملاء مع رصيد الذمّة */
 router.get("/", async (req, res) => {
-  const orgId = req.user.organizationId;
-  const debtsOnly =
-    req.query.debtsOnly === "1" || String(req.query.debtsOnly).toLowerCase() === "true";
-  const rows = await prisma.customer.findMany({
-    where: {
-      organizationId: orgId,
-      ...(debtsOnly ? { accountBalance: { gt: 0 } } : {}),
-    },
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      email: true,
-      accountBalance: true,
-    },
-    take: 500,
-  });
-  res.json(rows);
+  try {
+    const orgId = req.user.organizationId;
+    const debtsOnly =
+      req.query.debtsOnly === "1" || String(req.query.debtsOnly).toLowerCase() === "true";
+    const rows = await prisma.customer.findMany({
+      where: {
+        organizationId: orgId,
+        ...(debtsOnly ? { accountBalance: { gt: 0 } } : {}),
+      },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        accountBalance: true,
+      },
+      take: 500,
+    });
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e instanceof Error ? e.message : "فشل تحميل الحسابات" });
+  }
 });
 
 /** All cash / payment transactions (sales + receivable collections) */
 router.get("/transactions", async (req, res) => {
-  const orgId = req.user.organizationId;
-  const branchId =
-    req.query.branchId != null && String(req.query.branchId).trim()
-      ? String(req.query.branchId).trim()
-      : null;
-  if (branchId) {
-    const br = await findBranchInOrg(prisma, orgId, branchId);
-    if (!br) return res.status(400).json({ error: "فرع غير صالح" });
-  }
-  const limit = Math.min(300, Math.max(1, parseInt(String(req.query.limit || "150"), 10) || 150));
+  try {
+    const orgId = req.user.organizationId;
+    const branchId =
+      req.query.branchId != null && String(req.query.branchId).trim()
+        ? String(req.query.branchId).trim()
+        : null;
+    if (branchId) {
+      const br = await findBranchInOrg(prisma, orgId, branchId);
+      if (!br) return res.status(400).json({ error: "فرع غير صالح" });
+    }
+    const limit = Math.min(300, Math.max(1, parseInt(String(req.query.limit || "150"), 10) || 150));
 
-  const [sales, collections] = await Promise.all([
-    prisma.sale.findMany({
+    // Sequential queries — parallel open of large sale scans stresses the pool.
+    const sales = await prisma.sale.findMany({
       where: {
         branch: { organizationId: orgId },
         ...(branchId ? { branchId } : {}),
@@ -70,8 +76,8 @@ router.get("/transactions", async (req, res) => {
         user: { select: { id: true, name: true } },
         branch: { select: { id: true, name: true, nameEn: true } },
       },
-    }),
-    prisma.customerAccountLedger.findMany({
+    });
+    const collections = await prisma.customerAccountLedger.findMany({
       where: {
         organizationId: orgId,
         entryType: "PAYMENT",
@@ -85,45 +91,48 @@ router.get("/transactions", async (req, res) => {
         createdBy: { select: { id: true, name: true } },
         sale: { select: { id: true, invoiceNumber: true } },
       },
-    }),
-  ]);
+    });
 
-  const rows = [
-    ...sales.map((s) => ({
-      id: `sale:${s.id}`,
-      kind: "SALE",
-      createdAt: s.createdAt,
-      amount: Number(s.amountPaid ?? s.total ?? 0),
-      total: Number(s.total ?? 0),
-      amountDue: Number(s.amountDue ?? 0),
-      paymentMethod: s.paymentMethod,
-      paymentSplits: s.paymentSplits,
-      invoiceNumber: s.invoiceNumber || null,
-      customer: s.customer,
-      user: s.user,
-      branch: s.branch,
-      note: null,
-    })),
-    ...collections.map((c) => ({
-      id: `collect:${c.id}`,
-      kind: "COLLECTION",
-      createdAt: c.createdAt,
-      amount: Math.abs(Number(c.amount ?? 0)),
-      total: Math.abs(Number(c.amount ?? 0)),
-      amountDue: null,
-      paymentMethod: c.paymentMethod || "CASH",
-      paymentSplits: null,
-      invoiceNumber: c.sale?.invoiceNumber || null,
-      customer: c.customer,
-      user: c.createdBy,
-      branch: c.branch,
-      note: c.note || null,
-    })),
-  ]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, limit);
+    const rows = [
+      ...sales.map((s) => ({
+        id: `sale:${s.id}`,
+        kind: "SALE",
+        createdAt: s.createdAt,
+        amount: Number(s.amountPaid ?? s.total ?? 0),
+        total: Number(s.total ?? 0),
+        amountDue: Number(s.amountDue ?? 0),
+        paymentMethod: s.paymentMethod,
+        paymentSplits: s.paymentSplits,
+        invoiceNumber: s.invoiceNumber || null,
+        customer: s.customer,
+        user: s.user,
+        branch: s.branch,
+        note: null,
+      })),
+      ...collections.map((c) => ({
+        id: `collect:${c.id}`,
+        kind: "COLLECTION",
+        createdAt: c.createdAt,
+        amount: Math.abs(Number(c.amount ?? 0)),
+        total: Math.abs(Number(c.amount ?? 0)),
+        amountDue: null,
+        paymentMethod: c.paymentMethod || "CASH",
+        paymentSplits: null,
+        invoiceNumber: c.sale?.invoiceNumber || null,
+        customer: c.customer,
+        user: c.createdBy,
+        branch: c.branch,
+        note: c.note || null,
+      })),
+    ]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, limit);
 
-  res.json(rows);
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e instanceof Error ? e.message : "فشل تحميل المعاملات" });
+  }
 });
 
 /** كشف حساب ذمّة */

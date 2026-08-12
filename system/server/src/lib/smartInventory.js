@@ -78,37 +78,36 @@ export async function buildReorderRecommendations({
   const since = new Date();
   since.setDate(since.getDate() - lookbackDays);
 
-  const [inventoryRows, salesRows] = await Promise.all([
-    prisma.inventory.findMany({
-      where: {
+  // Sequential reads keep pool usage low under Supabase session limits.
+  const inventoryRows = await prisma.inventory.findMany({
+    where: {
+      branchId,
+      branch: { organizationId: orgId },
+      product: { organizationId: orgId, isActive: true },
+    },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          nameEn: true,
+          sku: true,
+          barcode: true,
+          cost: true,
+        },
+      },
+    },
+  });
+  const salesRows = await prisma.saleItem.findMany({
+    where: {
+      sale: {
         branchId,
         branch: { organizationId: orgId },
-        product: { organizationId: orgId, isActive: true },
+        createdAt: { gte: since },
       },
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            nameEn: true,
-            sku: true,
-            barcode: true,
-            cost: true,
-          },
-        },
-      },
-    }),
-    prisma.saleItem.findMany({
-      where: {
-        sale: {
-          branchId,
-          branch: { organizationId: orgId },
-          createdAt: { gte: since },
-        },
-      },
-      select: { productId: true, quantity: true },
-    }),
-  ]);
+    },
+    select: { productId: true, quantity: true },
+  });
 
   const soldByProduct = new Map();
   for (const row of salesRows) {
@@ -317,19 +316,18 @@ export async function buildIntelligenceOverview({
   targetStockDays = 21,
   wasteWithinDays = 30,
 }) {
-  const [reorder, waste, openDrafts] = await Promise.all([
-    buildReorderRecommendations({
-      orgId,
-      branchId,
-      lookbackDays,
-      targetStockDays,
-      minDailySales: 0.05,
-    }),
-    buildWasteBoard({ orgId, branchId, withinDays: wasteWithinDays }),
-    prisma.purchaseDraft.count({
-      where: { organizationId: orgId, branchId, status: "OPEN" },
-    }),
-  ]);
+  // Serialize heavy scans — parallel fan-out exhausts Supabase session pool.
+  const reorder = await buildReorderRecommendations({
+    orgId,
+    branchId,
+    lookbackDays,
+    targetStockDays,
+    minDailySales: 0.05,
+  });
+  const waste = await buildWasteBoard({ orgId, branchId, withinDays: wasteWithinDays });
+  const openDrafts = await prisma.purchaseDraft.count({
+    where: { organizationId: orgId, branchId, status: "OPEN" },
+  });
 
   return {
     branchId,
@@ -346,5 +344,7 @@ export async function buildIntelligenceOverview({
       top: waste.items.slice(0, 5),
     },
     openDrafts,
+    /** @internal Full waste board for server-side reuse (not for API clients). */
+    _wasteBoard: waste,
   };
 }

@@ -21,44 +21,43 @@ export async function buildBalanceSuggestions({
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const [inventoryRows, salesRows, branches] = await Promise.all([
-    prisma.inventory.findMany({
-      where: {
+  // Sequential to avoid opening 3 pool connections at once under session limits.
+  const inventoryRows = await prisma.inventory.findMany({
+    where: {
+      branch: { organizationId: orgId },
+      product: { organizationId: orgId, isActive: true },
+    },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          nameEn: true,
+          sku: true,
+          barcode: true,
+          cost: true,
+        },
+      },
+      branch: { select: { id: true, name: true } },
+    },
+  });
+  const salesRows = await prisma.saleItem.findMany({
+    where: {
+      sale: {
         branch: { organizationId: orgId },
-        product: { organizationId: orgId, isActive: true },
+        createdAt: { gte: since },
       },
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            nameEn: true,
-            sku: true,
-            barcode: true,
-            cost: true,
-          },
-        },
-        branch: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.saleItem.findMany({
-      where: {
-        sale: {
-          branch: { organizationId: orgId },
-          createdAt: { gte: since },
-        },
-      },
-      select: {
-        productId: true,
-        quantity: true,
-        sale: { select: { branchId: true } },
-      },
-    }),
-    prisma.branch.findMany({
-      where: { organizationId: orgId },
-      select: { id: true, name: true },
-    }),
-  ]);
+    },
+    select: {
+      productId: true,
+      quantity: true,
+      sale: { select: { branchId: true } },
+    },
+  });
+  const branches = await prisma.branch.findMany({
+    where: { organizationId: orgId },
+    select: { id: true, name: true },
+  });
 
   if (branches.length < 2) {
     return {

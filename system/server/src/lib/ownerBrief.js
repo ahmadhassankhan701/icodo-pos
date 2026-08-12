@@ -5,6 +5,7 @@ import {
 } from "./smartInventory.js";
 import { buildMarkdownSuggestions } from "./intelligentPricing.js";
 import { assessCheckoutRisk } from "./cashierCopilot.js";
+import { runWithConcurrency } from "./asyncPool.js";
 
 function money(n) {
   const x = Number(n);
@@ -94,25 +95,23 @@ async function aggregateRefundsWindow({ orgId, branchId, from, to }) {
     ...branchSaleFilter(orgId, branchId),
     createdAt: { gte: from, lt: to },
   };
-  const [agg, rows] = await Promise.all([
-    prisma.refund.aggregate({
-      where,
-      _count: true,
-      _sum: { total: true },
-    }),
-    prisma.refund.findMany({
-      where,
-      select: {
-        id: true,
-        total: true,
-        note: true,
-        createdAt: true,
-        user: { select: { id: true, name: true } },
-      },
-      orderBy: { total: "desc" },
-      take: 25,
-    }),
-  ]);
+  const agg = await prisma.refund.aggregate({
+    where,
+    _count: true,
+    _sum: { total: true },
+  });
+  const rows = await prisma.refund.findMany({
+    where,
+    select: {
+      id: true,
+      total: true,
+      note: true,
+      createdAt: true,
+      user: { select: { id: true, name: true } },
+    },
+    orderBy: { total: "desc" },
+    take: 25,
+  });
 
   const byCashier = new Map();
   for (const r of rows) {
@@ -323,65 +322,7 @@ export async function buildDailyBrief({
   const weekAgoEnd = addLocalDays(weekAgoStart, 1);
   const dateLabel = dayKey(focusStart);
 
-  const salesFocusP = aggregateSalesWindow({
-    orgId,
-    branchId,
-    from: focusStart,
-    to: focusEnd,
-  });
-  const salesPriorP = aggregateSalesWindow({
-    orgId,
-    branchId,
-    from: priorStart,
-    to: priorEnd,
-  });
-  const salesWeekP = aggregateSalesWindow({
-    orgId,
-    branchId,
-    from: weekAgoStart,
-    to: weekAgoEnd,
-  });
-  const refundsP = aggregateRefundsWindow({
-    orgId,
-    branchId,
-    from: focusStart,
-    to: focusEnd,
-  });
-  const refundsPriorP = aggregateRefundsWindow({
-    orgId,
-    branchId,
-    from: priorStart,
-    to: priorEnd,
-  });
-  const cashierP = buildCashierAnomalies({
-    orgId,
-    branchId,
-    from: focusStart,
-    to: focusEnd,
-  });
-
-  const stockP = branchId
-    ? buildIntelligenceOverview({
-        orgId,
-        branchId,
-        lookbackDays: clampInt(lookbackDays, 7, 120, 30),
-        targetStockDays: clampInt(targetStockDays, 7, 90, 21),
-        wasteWithinDays: clampInt(wasteWithinDays, 1, 120, 14),
-      })
-    : Promise.resolve(null);
-
-  const markdownP = branchId
-    ? buildMarkdownSuggestions({
-        orgId,
-        branchId,
-        withinDays: clampInt(wasteWithinDays, 1, 120, 14),
-      }).then((res) => (Array.isArray(res?.items) ? res.items.slice(0, 5) : []))
-    : Promise.resolve([]);
-
-  const branchesP = includeBranches
-    ? buildBranchComparison({ orgId, from: focusStart, to: focusEnd })
-    : Promise.resolve([]);
-
+  // Cap concurrency — large Promise.all fan-outs exhaust Supabase session pools.
   const [
     salesFocus,
     salesPrior,
@@ -389,20 +330,80 @@ export async function buildDailyBrief({
     refunds,
     refundsPrior,
     cashier,
-    stockOv,
-    markdowns,
-    branches,
-  ] = await Promise.all([
-    salesFocusP,
-    salesPriorP,
-    salesWeekP,
-    refundsP,
-    refundsPriorP,
-    cashierP,
-    stockP,
-    markdownP,
-    branchesP,
-  ]);
+  ] = await runWithConcurrency(
+    [
+      () =>
+        aggregateSalesWindow({
+          orgId,
+          branchId,
+          from: focusStart,
+          to: focusEnd,
+        }),
+      () =>
+        aggregateSalesWindow({
+          orgId,
+          branchId,
+          from: priorStart,
+          to: priorEnd,
+        }),
+      () =>
+        aggregateSalesWindow({
+          orgId,
+          branchId,
+          from: weekAgoStart,
+          to: weekAgoEnd,
+        }),
+      () =>
+        aggregateRefundsWindow({
+          orgId,
+          branchId,
+          from: focusStart,
+          to: focusEnd,
+        }),
+      () =>
+        aggregateRefundsWindow({
+          orgId,
+          branchId,
+          from: priorStart,
+          to: priorEnd,
+        }),
+      () =>
+        buildCashierAnomalies({
+          orgId,
+          branchId,
+          from: focusStart,
+          to: focusEnd,
+        }),
+    ],
+    2,
+  );
+
+  const wasteWithin = clampInt(wasteWithinDays, 1, 120, 14);
+  const stockOv = branchId
+    ? await buildIntelligenceOverview({
+        orgId,
+        branchId,
+        lookbackDays: clampInt(lookbackDays, 7, 120, 30),
+        targetStockDays: clampInt(targetStockDays, 7, 90, 21),
+        wasteWithinDays: wasteWithin,
+      })
+    : null;
+
+  const markdowns =
+    branchId && stockOv
+      ? (
+          await buildMarkdownSuggestions({
+            orgId,
+            branchId,
+            withinDays: wasteWithin,
+            wasteBoard: stockOv._wasteBoard,
+          })
+        ).items.slice(0, 5)
+      : [];
+
+  const branches = includeBranches
+    ? await buildBranchComparison({ orgId, from: focusStart, to: focusEnd })
+    : [];
 
   const salesDelta = deltaPct(salesFocus.total, salesPrior.total);
   const salesWeekDelta = deltaPct(salesFocus.total, salesWeek.total);
