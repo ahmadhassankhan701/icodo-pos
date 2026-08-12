@@ -7,6 +7,7 @@ import { BusinessVerticalIcon } from "../lib/businessVerticalIcons.jsx";
 import { getPostAuthPath } from "../lib/onboardingPath.js";
 import { AuthShell } from "../marketing/AuthShell.jsx";
 import { useMarketingCopy } from "../marketing/copy.js";
+import { PasswordField } from "../components/PasswordField.jsx";
 
 const btnGrid = {
   display: "grid",
@@ -238,29 +239,23 @@ export default function Register() {
                 autoComplete="email"
               />
             </div>
-            <div className="mkt-field">
-              <label htmlFor="reg-pass">{t("register.adminPassword")}</label>
-              <input
-                id="reg-pass"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                type="password"
-                required
-                minLength={6}
-                autoComplete="new-password"
-              />
-            </div>
-            <div className="mkt-field">
-              <label htmlFor="reg-secret">{t("register.registrationSecret")}</label>
-              <input
-                id="reg-secret"
-                value={registrationSecret}
-                onChange={(e) => setRegistrationSecret(e.target.value)}
-                type="password"
-                autoComplete="off"
-                placeholder={t("register.registrationSecretPlaceholder")}
-              />
-            </div>
+            <PasswordField
+              id="reg-pass"
+              label={t("register.adminPassword")}
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              required
+              minLength={6}
+              autoComplete="new-password"
+            />
+            <PasswordField
+              id="reg-secret"
+              label={t("register.registrationSecret")}
+              value={registrationSecret}
+              onChange={(e) => setRegistrationSecret(e.target.value)}
+              autoComplete="off"
+              placeholder={t("register.registrationSecretPlaceholder")}
+            />
           </>
         ) : null}
 

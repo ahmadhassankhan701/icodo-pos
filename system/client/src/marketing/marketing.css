@@ -997,6 +997,46 @@
   resize: vertical;
 }
 
+.mkt-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.mkt-password-wrap input {
+  width: 100%;
+  padding-inline-end: 2.75rem;
+}
+
+.mkt-password-toggle {
+  position: absolute;
+  inset-inline-end: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--mkt-muted, #64748b);
+  cursor: pointer;
+}
+
+.mkt-password-toggle:hover {
+  color: var(--mkt-ink, #0f172a);
+  background: color-mix(in srgb, var(--mkt-ink, #0f172a) 6%, transparent);
+}
+
+.mkt-password-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mkt-blue, #2563eb) 45%, transparent);
+  outline-offset: 1px;
+}
+
 /* —— Auth —— */
 .mkt-auth-wrap {
   padding: 2rem 0 3rem;

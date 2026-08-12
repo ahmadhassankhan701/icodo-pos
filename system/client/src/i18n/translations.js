@@ -242,6 +242,8 @@ const entries = [
   ["login.email", "البريد", "Email"],
   ["login.orgSlug", "رمز المؤسسة (اختياري — إن وُجد أكثر من حساب لنفس البريد)", "Organization slug (optional)"],
   ["login.password", "كلمة المرور", "Password"],
+  ["auth.showPassword", "إظهار كلمة المرور", "Show password"],
+  ["auth.hidePassword", "إخفاء كلمة المرور", "Hide password"],
   ["login.submit", "دخول", "Sign in"],
   ["login.failed", "فشل الدخول", "Sign in failed"],
   ["login.dbDiagnostics", "تشخيص الاتصال (بدون كشف أسرار)", "Connection check (no secrets)"],

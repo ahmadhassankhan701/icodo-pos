@@ -5,6 +5,7 @@ import { useI18n } from "../context/LanguageContext.jsx";
 import { getPostAuthPath } from "../lib/onboardingPath.js";
 import { AuthShell } from "../marketing/AuthShell.jsx";
 import { useMarketingCopy } from "../marketing/copy.js";
+import { PasswordField } from "../components/PasswordField.jsx";
 
 export default function Login() {
   const { login, user, loading } = useAuth();
@@ -55,17 +56,14 @@ export default function Login() {
             autoComplete="username"
           />
         </div>
-        <div className="mkt-field">
-          <label htmlFor="login-password">{t("login.password")}</label>
-          <input
-            id="login-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            required
-            autoComplete="current-password"
-          />
-        </div>
+        <PasswordField
+          id="login-password"
+          label={t("login.password")}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+        />
         {err ? <div className="mkt-error">{err}</div> : null}
         {dbUrlInfo ? (
           <div
