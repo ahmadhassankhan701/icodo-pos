@@ -3,6 +3,11 @@ import { prisma } from "../lib/prisma.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { calendarDaysUntilExpiryUTC } from "../lib/productExpiry.js";
 import { resolveStoredImageUrl } from "../lib/productImageUrl.js";
+import {
+  dbUnavailableMessage,
+  dbUnavailableMessageEn,
+  isDbUnavailableError,
+} from "../lib/dbErrors.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -245,6 +250,14 @@ router.get("/", async (req, res) => {
     res.json({ items, readKeys: [...readKeys] });
   } catch (e) {
     console.error("[notifications]", e);
+    if (isDbUnavailableError(e)) {
+      return res.status(503).json({
+        error: dbUnavailableMessage,
+        errorAr: dbUnavailableMessage,
+        errorEn: dbUnavailableMessageEn,
+        code: "DB_UNAVAILABLE",
+      });
+    }
     res.status(500).json({ error: "تعذر جلب التنبيهات" });
   }
 });
@@ -258,6 +271,14 @@ router.get("/unread-count", async (req, res) => {
     res.json({ count: n });
   } catch (e) {
     console.error("[notifications/unread-count]", e);
+    if (isDbUnavailableError(e)) {
+      return res.status(503).json({
+        error: dbUnavailableMessage,
+        errorAr: dbUnavailableMessage,
+        errorEn: dbUnavailableMessageEn,
+        code: "DB_UNAVAILABLE",
+      });
+    }
     res.status(500).json({ error: "تعذر حساب غير المقروء" });
   }
 });
