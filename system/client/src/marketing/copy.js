@@ -11,7 +11,8 @@ export const marketingCopy = {
       privacy: "سياسة الخصوصية",
       signIn: "تسجيل الدخول",
       signUp: "إنشاء حساب",
-      openMenu: "القائمة",
+      openMenu: "فتح القائمة",
+      closeMenu: "إغلاق القائمة",
     },
     footer: {
       tagline: "منصة نقاط بيع متعددة الأنشطة — من ICODO، شريكك في بناء المنتجات الرقمية.",
@@ -279,7 +280,8 @@ export const marketingCopy = {
       privacy: "Privacy Policy",
       signIn: "Sign in",
       signUp: "Sign up",
-      openMenu: "Menu",
+      openMenu: "Open menu",
+      closeMenu: "Close menu",
     },
     footer: {
       tagline: "Multi-vertical point of sale — from ICODO, your partner in digital products.",

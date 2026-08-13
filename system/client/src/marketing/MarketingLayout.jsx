@@ -25,11 +25,20 @@ export function MarketingLayout() {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
   const navClass = ({ isActive }) => (isActive ? "is-active" : undefined);
 
   return (
     <div className="mkt" data-theme="light">
-      <header className={`mkt-nav${scrolled ? " is-scrolled" : ""}`}>
+      <header className={`mkt-nav${scrolled ? " is-scrolled" : ""}${menuOpen ? " is-menu-open" : ""}`}>
         <div className="mkt-shell mkt-nav-inner">
           <Link to="/" className="mkt-brand" aria-label="i codo POS">
             <IcodoNavBrand posLabel={c.brandProduct} />
@@ -51,33 +60,70 @@ export function MarketingLayout() {
           </nav>
 
           <div className="mkt-nav-actions">
-            <LanguageSwitcher variant="compact" className="mkt-lang-switch" />
-            <Link to="/login" className="mkt-btn mkt-btn-ghost" style={{ minHeight: "2.5rem" }}>
-              {c.nav.signIn}
-            </Link>
-            <Link to="/register" className="mkt-btn mkt-btn-primary" style={{ minHeight: "2.5rem" }}>
-              {c.nav.signUp}
-            </Link>
+            <div className="mkt-nav-actions-desktop">
+              <LanguageSwitcher variant="compact" className="mkt-lang-switch" />
+              <Link to="/login" className="mkt-btn mkt-btn-ghost mkt-nav-cta">
+                {c.nav.signIn}
+              </Link>
+              <Link to="/register" className="mkt-btn mkt-btn-primary mkt-nav-cta">
+                {c.nav.signUp}
+              </Link>
+            </div>
             <button
               type="button"
               className="mkt-nav-toggle"
-              aria-label={c.nav.openMenu}
+              aria-label={menuOpen ? c.nav.closeMenu || c.nav.openMenu : c.nav.openMenu}
               aria-expanded={menuOpen}
+              aria-controls="mkt-mobile-drawer"
               onClick={() => setMenuOpen((v) => !v)}
             >
-              ☰
+              {menuOpen ? "✕" : "☰"}
             </button>
           </div>
         </div>
+
         {menuOpen ? (
-          <div className="mkt-shell mkt-nav-mobile">
-            <NavLink to="/" end>
-              {c.nav.home}
-            </NavLink>
-            <NavLink to="/about">{c.nav.about}</NavLink>
-            <NavLink to="/pricing">{c.nav.pricing}</NavLink>
-            <NavLink to="/contact">{c.nav.contact}</NavLink>
-          </div>
+          <>
+            <button
+              type="button"
+              className="mkt-nav-backdrop"
+              aria-label={c.nav.closeMenu || c.nav.openMenu}
+              onClick={() => setMenuOpen(false)}
+            />
+            <div id="mkt-mobile-drawer" className="mkt-nav-drawer" role="dialog" aria-modal="true">
+              <nav className="mkt-nav-drawer-links" aria-label="Main">
+                <NavLink to="/" end className={navClass} onClick={() => setMenuOpen(false)}>
+                  {c.nav.home}
+                </NavLink>
+                <NavLink to="/about" className={navClass} onClick={() => setMenuOpen(false)}>
+                  {c.nav.about}
+                </NavLink>
+                <NavLink to="/pricing" className={navClass} onClick={() => setMenuOpen(false)}>
+                  {c.nav.pricing}
+                </NavLink>
+                <NavLink to="/contact" className={navClass} onClick={() => setMenuOpen(false)}>
+                  {c.nav.contact}
+                </NavLink>
+              </nav>
+              <div className="mkt-nav-drawer-actions">
+                <LanguageSwitcher variant="compact" className="mkt-lang-switch mkt-lang-switch--drawer" />
+                <Link
+                  to="/login"
+                  className="mkt-btn mkt-btn-ghost mkt-btn-block"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {c.nav.signIn}
+                </Link>
+                <Link
+                  to="/register"
+                  className="mkt-btn mkt-btn-primary mkt-btn-block"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {c.nav.signUp}
+                </Link>
+              </div>
+            </div>
+          </>
         ) : null}
       </header>
 

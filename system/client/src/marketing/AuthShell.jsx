@@ -19,10 +19,13 @@ export function AuthShell({ title, subtitle, children }) {
             <IcodoNavBrand posLabel={c.brandProduct} />
           </Link>
           <div className="mkt-nav-actions">
-            <LanguageSwitcher variant="compact" className="mkt-lang-switch" />
-            <Link to="/" className="mkt-btn mkt-btn-ghost" style={{ minHeight: "2.5rem" }}>
-              {c.auth.backHome}
-            </Link>
+            <div className="mkt-nav-actions-desktop">
+              <LanguageSwitcher variant="compact" className="mkt-lang-switch" />
+              <Link to="/" className="mkt-btn mkt-btn-ghost mkt-nav-cta">
+                {c.auth.backHome}
+              </Link>
+            </div>
+            <LanguageSwitcher variant="compact" className="mkt-lang-switch mkt-lang-switch--auth-mobile" />
           </div>
         </div>
       </header>
