@@ -2,22 +2,14 @@ import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { useMarketingCopy } from "../../marketing/copy.js";
+import { COUNTRY_PACKS } from "../../lib/countries.js";
 import { currencyFromCountry, currencyLabel, sarToLocal } from "../../lib/fxGulf.js";
-
-const COUNTRIES = [
-  { code: "SA", ar: "السعودية", en: "Saudi Arabia" },
-  { code: "QA", ar: "قطر", en: "Qatar" },
-  { code: "AE", ar: "الإمارات", en: "UAE" },
-  { code: "KW", ar: "الكويت", en: "Kuwait" },
-  { code: "BH", ar: "البحرين", en: "Bahrain" },
-  { code: "OM", ar: "عُمان", en: "Oman" },
-];
 
 export default function Pricing() {
   const { locale } = useI18n();
   const c = useMarketingCopy(locale);
   const pr = c.pricing;
-  const [country, setCountry] = useState("SA");
+  const [country, setCountry] = useState("DZ");
 
   const currency = useMemo(() => currencyFromCountry(country), [country]);
   const label = currencyLabel(currency, locale);
@@ -64,9 +56,9 @@ export default function Pricing() {
                 onChange={(e) => setCountry(e.target.value)}
                 style={{ minHeight: 42, borderRadius: 10, padding: "8px 10px" }}
               >
-                {COUNTRIES.map((co) => (
+                {COUNTRY_PACKS.map((co) => (
                   <option key={co.code} value={co.code}>
-                    {locale === "en" ? co.en : co.ar}
+                    {locale === "en" ? co.labelEn : co.labelAr}
                   </option>
                 ))}
               </select>

@@ -5,19 +5,11 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useI18n } from "../../context/LanguageContext.jsx";
 import { getPostAuthPath, isOnboardingComplete } from "../../lib/onboardingPath.js";
 import { OnboardingShell } from "./OnboardingShell.jsx";
-
-const COUNTRY_LABELS = {
-  QA: { ar: "قطر", en: "Qatar" },
-  SA: { ar: "السعودية", en: "Saudi Arabia" },
-  AE: { ar: "الإمارات", en: "United Arab Emirates" },
-  KW: { ar: "الكويت", en: "Kuwait" },
-  BH: { ar: "البحرين", en: "Bahrain" },
-  OM: { ar: "عُمان", en: "Oman" },
-};
+import { COUNTRY_PACKS } from "../../lib/countries.js";
 
 const emptyForm = {
   legalName: "",
-  country: "QA",
+  country: "DZ",
   city: "",
   addressText: "",
   crNumber: "",
@@ -37,6 +29,7 @@ export default function OnboardingProfile() {
   const { t, locale } = useI18n();
   const nav = useNavigate();
   const [form, setForm] = useState(emptyForm);
+  const [countries, setCountries] = useState(COUNTRY_PACKS);
   const [files, setFiles] = useState({});
   const [docsMeta, setDocsMeta] = useState([]);
   const [err, setErr] = useState("");
@@ -58,10 +51,13 @@ export default function OnboardingProfile() {
     api("/api/onboarding/status")
       .then((data) => {
         const o = data.onboarding || {};
+        if (Array.isArray(data.countries) && data.countries.length) {
+          setCountries(data.countries);
+        }
         setForm((prev) => ({
           ...prev,
           legalName: o.legalName || user.organizationName || "",
-          country: o.country || "QA",
+          country: o.country || prev.country || "DZ",
           city: o.city || "",
           addressText: o.addressText || "",
           crNumber: o.crNumber || "",
@@ -166,9 +162,9 @@ export default function OnboardingProfile() {
             <div className="mkt-field">
               <label htmlFor="ob-country">{t("onboarding.country")} *</label>
               <select id="ob-country" required value={form.country} onChange={setField("country")}>
-                {Object.keys(COUNTRY_LABELS).map((code) => (
-                  <option key={code} value={code}>
-                    {COUNTRY_LABELS[code][locale === "en" ? "en" : "ar"]}
+                {countries.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {locale === "en" ? c.labelEn : c.labelAr}
                   </option>
                 ))}
               </select>

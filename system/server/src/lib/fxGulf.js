@@ -1,17 +1,9 @@
-/**
- * Gulf FX vs SAR (billing source of truth).
- * Pegs / published mid rates for display conversion only — Stripe always charges SAR.
- */
-export const SAR_PER_UNIT = {
-  SAR: 1,
-  QAR: 1, // QAR is pegged ~1:1 with SAR for retail display
-  AED: 1.02, // ~1 AED ≈ 1.02 SAR (inverse used below)
-  KWD: 12.25,
-  BHD: 9.95,
-  OMR: 9.75,
-};
+import { COUNTRY_PACKS } from "./countries.js";
 
-/** How many local units equal 1 SAR (approx). */
+/**
+ * Display FX vs SAR (billing source of truth).
+ * Approximate mid rates for plan display only — Stripe still charges SAR.
+ */
 export const LOCAL_PER_SAR = {
   SAR: 1,
   QAR: 1,
@@ -19,7 +11,36 @@ export const LOCAL_PER_SAR = {
   KWD: 0.082,
   BHD: 0.1,
   OMR: 0.103,
+  DZD: 35.5,
+  MAD: 2.65,
+  TND: 0.83,
+  LYD: 1.28,
+  EGP: 13.2,
+  JOD: 0.19,
+  LBP: 23800,
+  IQD: 350,
+  ILS: 0.98,
+  YER: 67,
+  SDG: 160,
+  NGN: 430,
+  KES: 34,
+  ZAR: 4.8,
+  EUR: 0.25,
+  GBP: 0.21,
+  USD: 0.27,
+  CAD: 0.37,
+  TRY: 9.1,
+  INR: 22.5,
+  PKR: 74,
+  IDR: 4300,
+  MYR: 1.2,
+  SGD: 0.36,
+  AUD: 0.41,
 };
+
+const COUNTRY_CURRENCY = Object.fromEntries(
+  COUNTRY_PACKS.map((c) => [c.code, c.currency]),
+);
 
 export function normalizeCurrency(code) {
   const c = String(code || "SAR").trim().toUpperCase();
@@ -27,15 +48,8 @@ export function normalizeCurrency(code) {
 }
 
 export function currencyFromCountry(countryCode) {
-  const map = {
-    SA: "SAR",
-    QA: "QAR",
-    AE: "AED",
-    KW: "KWD",
-    BH: "BHD",
-    OM: "OMR",
-  };
-  return map[String(countryCode || "SA").toUpperCase()] || "SAR";
+  const mapped = COUNTRY_CURRENCY[String(countryCode || "SA").toUpperCase()];
+  return normalizeCurrency(mapped || "SAR");
 }
 
 /** Convert SAR plan amount → local major units for display. */
@@ -43,7 +57,7 @@ export function sarToLocal(amountSar, currency) {
   const code = normalizeCurrency(currency);
   const rate = LOCAL_PER_SAR[code] ?? 1;
   const n = Number(amountSar) || 0;
-  const decimals = code === "KWD" || code === "BHD" || code === "OMR" ? 3 : 2;
+  const decimals = code === "KWD" || code === "BHD" || code === "OMR" || code === "JOD" ? 3 : 2;
   const local = n * rate;
   return Number(local.toFixed(decimals));
 }
@@ -58,9 +72,17 @@ export function formatLocalAmount(amountSar, currency, locale = "ar") {
     KWD: { ar: "د.ك", en: "KWD" },
     BHD: { ar: "د.ب", en: "BHD" },
     OMR: { ar: "ر.ع", en: "OMR" },
+    DZD: { ar: "د.ج", en: "DZD" },
+    MAD: { ar: "د.م", en: "MAD" },
+    TND: { ar: "د.ت", en: "TND" },
+    LYD: { ar: "د.ل", en: "LYD" },
+    EGP: { ar: "ج.م", en: "EGP" },
+    EUR: { ar: "€", en: "EUR" },
+    GBP: { ar: "£", en: "GBP" },
+    USD: { ar: "$", en: "USD" },
   };
   const label = labels[code]?.[locale === "en" ? "en" : "ar"] || code;
-  const decimals = code === "KWD" || code === "BHD" || code === "OMR" ? 3 : 2;
+  const decimals = code === "KWD" || code === "BHD" || code === "OMR" || code === "JOD" ? 3 : 2;
   return { amount: local, code, label, formatted: `${local.toFixed(decimals)} ${label}` };
 }
 

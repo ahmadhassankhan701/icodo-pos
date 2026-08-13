@@ -189,7 +189,7 @@ const entries = [
   ["permissions.keyHint.expenses", "تسجيل المصاريف من التقارير", "Record expenses from Reports"],
   ["nav.settings", "الإعدادات", "Settings"],
   ["settings.title", "الإعدادات", "Settings"],
-  ["tax.title", "الضريبة والعملة (الخليج)", "Tax & currency (GCC)"],
+  ["tax.title", "الضريبة والعملة", "Tax & currency"],
   ["tax.intro", "اختر حزمة ضريبة بلدك — تُطبَّق كنسبة افتراضية في نقطة البيع وتظهر على الفواتير.", "Pick your country tax pack — used as the POS default and shown on invoices."],
   ["tax.countryPack", "حزمة الدولة", "Country pack"],
   ["tax.standardRate", "نسبة الضريبة %", "Standard VAT %"],

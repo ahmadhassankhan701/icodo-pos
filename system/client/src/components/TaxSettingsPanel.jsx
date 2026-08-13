@@ -2,14 +2,15 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useI18n } from "../context/LanguageContext.jsx";
+import { COUNTRY_PACKS } from "../lib/countries.js";
 
 export default function TaxSettingsPanel() {
   const { t, locale } = useI18n();
   const { user, refreshUser, isAdmin } = useAuth();
   const [form, setForm] = useState({
-    countryCode: "QA",
-    currency: "QAR",
-    standardRate: "0",
+    countryCode: "DZ",
+    currency: "DZD",
+    standardRate: "19",
     enabled: true,
   });
   const [packs, setPacks] = useState([]);
@@ -21,8 +22,8 @@ export default function TaxSettingsPanel() {
     api("/api/tax-settings")
       .then((s) => {
         setForm({
-          countryCode: s.countryCode || "QA",
-          currency: s.currency || "QAR",
+          countryCode: s.countryCode || "DZ",
+          currency: s.currency || "DZD",
           standardRate: String(s.standardRate ?? 0),
           enabled: s.enabled !== false,
         });
@@ -104,14 +105,13 @@ export default function TaxSettingsPanel() {
           >
             {(packs.length
               ? packs
-              : [
-                  { countryCode: "QA", labelEn: "Qatar", labelAr: "قطر" },
-                  { countryCode: "SA", labelEn: "Saudi Arabia", labelAr: "السعودية" },
-                  { countryCode: "AE", labelEn: "UAE", labelAr: "الإمارات" },
-                  { countryCode: "KW", labelEn: "Kuwait", labelAr: "الكويت" },
-                  { countryCode: "BH", labelEn: "Bahrain", labelAr: "البحرين" },
-                  { countryCode: "OM", labelEn: "Oman", labelAr: "عُمان" },
-                ]
+              : COUNTRY_PACKS.map((c) => ({
+                  countryCode: c.code,
+                  labelEn: c.labelEn,
+                  labelAr: c.labelAr,
+                  currency: c.currency,
+                  standardRate: c.standardRate,
+                }))
             ).map((p) => (
               <option key={p.countryCode} value={p.countryCode}>
                 {locale === "en" ? p.labelEn : p.labelAr} ({p.countryCode})

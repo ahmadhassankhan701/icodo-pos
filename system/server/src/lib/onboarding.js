@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { currencyFromCountry, planDisplayPayload } from "./fxGulf.js";
+import { ONBOARDING_COUNTRY_CODES, countriesForClient } from "./countries.js";
 
 /** First three months free (Stripe subscription trial). */
 export const TRIAL_DAYS = 90;
@@ -36,14 +37,9 @@ export const REQUIRED_DOC_TYPES = ["CR", "OWNER_ID"];
 export const OPTIONAL_DOC_TYPES = ["VAT", "LICENSE", "IBAN"];
 export const ALL_DOC_TYPES = [...REQUIRED_DOC_TYPES, ...OPTIONAL_DOC_TYPES];
 
-export const GULF_COUNTRIES = [
-  "QA",
-  "SA",
-  "AE",
-  "KW",
-  "BH",
-  "OM",
-];
+/** @deprecated prefer ONBOARDING_COUNTRY_CODES / countriesForClient() */
+export const GULF_COUNTRIES = ONBOARDING_COUNTRY_CODES;
+export { ONBOARDING_COUNTRY_CODES, countriesForClient };
 
 /** NOT_SUBMITTED | PENDING_REVIEW | APPROVED | REJECTED */
 export function normalizeReviewStatus(raw) {

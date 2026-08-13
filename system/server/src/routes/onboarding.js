@@ -4,14 +4,16 @@ import { prisma } from "../lib/prisma.js";
 import { authMiddleware } from "../middleware/auth.js";
 import {
   ALL_DOC_TYPES,
-  GULF_COUNTRIES,
+  ONBOARDING_COUNTRY_CODES,
   REQUIRED_DOC_TYPES,
   TRIAL_DAYS,
   clientOnboardingPayload,
+  countriesForClient,
   markPaymentComplete,
   onboardingStatusFromOrg,
   PLAN_INTERVALS,
 } from "../lib/onboarding.js";
+import { isSupportedCountry } from "../lib/countries.js";
 import {
   appPublicUrl,
   buildCheckoutLineItem,
@@ -66,7 +68,8 @@ router.get("/status", async (req, res, next) => {
     res.json({
       onboarding: clientOnboardingPayload(org, docs),
       stripeConfigured: stripeConfigured() || stripeBypassEnabled(),
-      countries: GULF_COUNTRIES,
+      countries: countriesForClient(),
+      countryCodes: ONBOARDING_COUNTRY_CODES,
     });
   } catch (e) {
     next(e);
@@ -109,8 +112,8 @@ router.post(
       if (!legalName || !country || !city || !addressText) {
         return res.status(400).json({ error: "Legal name, country, city, and address are required" });
       }
-      if (!GULF_COUNTRIES.includes(country)) {
-        return res.status(400).json({ error: "Country must be a Gulf Cooperation Council country" });
+      if (!isSupportedCountry(country)) {
+        return res.status(400).json({ error: "Please select a supported country" });
       }
       if (!crNumber || !ownerFullName || !ownerIdNumber || !ownerPhone) {
         return res.status(400).json({

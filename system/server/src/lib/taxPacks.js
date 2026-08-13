@@ -1,18 +1,34 @@
-/** Default GCC VAT / currency packs */
-export const TAX_PACKS = {
-  QA: { countryCode: "QA", currency: "QAR", standardRate: 0, labelEn: "Qatar", labelAr: "قطر" },
-  SA: { countryCode: "SA", currency: "SAR", standardRate: 15, labelEn: "Saudi Arabia", labelAr: "السعودية" },
-  AE: { countryCode: "AE", currency: "AED", standardRate: 5, labelEn: "UAE", labelAr: "الإمارات" },
-  KW: { countryCode: "KW", currency: "KWD", standardRate: 0, labelEn: "Kuwait", labelAr: "الكويت" },
-  BH: { countryCode: "BH", currency: "BHD", standardRate: 10, labelEn: "Bahrain", labelAr: "البحرين" },
-  OM: { countryCode: "OM", currency: "OMR", standardRate: 5, labelEn: "Oman", labelAr: "عُمان" },
-};
+import { COUNTRY_PACKS, countryPack } from "./countries.js";
 
-export const ALLOWED_TAX_RATES = [0, 5, 10, 15];
+/** Tax / currency packs derived from supported countries */
+export const TAX_PACKS = Object.fromEntries(
+  COUNTRY_PACKS.map((c) => [
+    c.code,
+    {
+      countryCode: c.code,
+      currency: c.currency,
+      standardRate: c.standardRate,
+      labelEn: c.labelEn,
+      labelAr: c.labelAr,
+    },
+  ]),
+);
+
+/** Common VAT/GST rates used across supported countries */
+export const ALLOWED_TAX_RATES = [0, 5, 7.5, 8, 9, 10, 11, 14, 15, 16, 18, 19, 20, 21, 22];
 
 export function packForCountry(countryCode) {
-  const code = String(countryCode || "QA").trim().toUpperCase();
-  return TAX_PACKS[code] || TAX_PACKS.QA;
+  const pack = countryPack(countryCode);
+  if (pack) {
+    return {
+      countryCode: pack.code,
+      currency: pack.currency,
+      standardRate: pack.standardRate,
+      labelEn: pack.labelEn,
+      labelAr: pack.labelAr,
+    };
+  }
+  return TAX_PACKS.SA || TAX_PACKS.QA;
 }
 
 export function currencyLabel(currency, locale = "ar") {
@@ -23,17 +39,43 @@ export function currencyLabel(currency, locale = "ar") {
     KWD: { ar: "د.ك", en: "KWD" },
     BHD: { ar: "د.ب", en: "BHD" },
     OMR: { ar: "ر.ع", en: "OMR" },
+    DZD: { ar: "د.ج", en: "DZD" },
+    MAD: { ar: "د.م", en: "MAD" },
+    TND: { ar: "د.ت", en: "TND" },
+    LYD: { ar: "د.ل", en: "LYD" },
+    EGP: { ar: "ج.م", en: "EGP" },
+    JOD: { ar: "د.أ", en: "JOD" },
+    LBP: { ar: "ل.ل", en: "LBP" },
+    IQD: { ar: "د.ع", en: "IQD" },
+    ILS: { ar: "₪", en: "ILS" },
+    YER: { ar: "ر.ي", en: "YER" },
+    SDG: { ar: "ج.س", en: "SDG" },
+    NGN: { ar: "₦", en: "NGN" },
+    KES: { ar: "KSh", en: "KES" },
+    ZAR: { ar: "R", en: "ZAR" },
+    EUR: { ar: "€", en: "EUR" },
+    GBP: { ar: "£", en: "GBP" },
+    USD: { ar: "$", en: "USD" },
+    CAD: { ar: "C$", en: "CAD" },
+    TRY: { ar: "₺", en: "TRY" },
+    INR: { ar: "₹", en: "INR" },
+    PKR: { ar: "₨", en: "PKR" },
+    IDR: { ar: "Rp", en: "IDR" },
+    MYR: { ar: "RM", en: "MYR" },
+    SGD: { ar: "S$", en: "SGD" },
+    AUD: { ar: "A$", en: "AUD" },
   };
-  const row = map[String(currency || "SAR").toUpperCase()] || map.SAR;
+  const code = String(currency || "SAR").toUpperCase();
+  const row = map[code] || { ar: code, en: code };
   return locale === "en" ? row.en : row.ar;
 }
 
 export function summarizeTaxSettings(row, org = null) {
   const rate = Number(row?.standardRate ?? 0);
-  const currency = row?.currency || "QAR";
+  const currency = row?.currency || "SAR";
   return {
     enabled: row?.enabled !== false,
-    countryCode: row?.countryCode || "QA",
+    countryCode: row?.countryCode || "SA",
     currency,
     currencyLabelAr: currencyLabel(currency, "ar"),
     currencyLabelEn: currencyLabel(currency, "en"),
@@ -57,7 +99,7 @@ export async function getOrCreateTaxSettings(prismaClient, organizationId) {
     where: { id: organizationId },
     select: { country: true },
   });
-  const pack = packForCountry(org?.country || "QA");
+  const pack = packForCountry(org?.country || "SA");
   return prismaClient.organizationTaxSettings.create({
     data: {
       organizationId,
@@ -97,6 +139,9 @@ export function resolveSaleTaxPercent(clientTaxPercent, taxSettings) {
   if (ALLOWED_TAX_RATES.includes(rounded) || ALLOWED_TAX_RATES.includes(Math.round(rounded))) {
     return Math.min(100, Math.max(0, rounded));
   }
-  // Allow custom but clamp 0–100 for edge cases
+  // Allow pack default rate even if not in the short list
+  if (Math.abs(rounded - summary.defaultTaxPercent) < 0.001) {
+    return summary.defaultTaxPercent;
+  }
   return Math.min(100, Math.max(0, rounded));
 }
