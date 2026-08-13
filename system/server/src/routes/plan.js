@@ -12,8 +12,7 @@ import {
   appPublicUrl,
   buildCheckoutLineItem,
   getStripe,
-  stripeBypassEnabled,
-  stripeConfigured,
+  shouldBypassCheckout,
 } from "../lib/stripe.js";
 import { sendError } from "../lib/apiError.js";
 
@@ -146,7 +145,7 @@ router.post("/checkout-session", async (req, res) => {
       return sendError(res, 400, "فترة اشتراك غير صالحة", "Invalid plan interval");
     }
 
-    if (stripeBypassEnabled() && !stripeConfigured()) {
+    if (shouldBypassCheckout()) {
       const updated = await markPaymentComplete(org, {
         planInterval,
         reference: `BYPASS-UPGRADE-${Date.now()}`,
@@ -162,7 +161,7 @@ router.post("/checkout-session", async (req, res) => {
         res,
         503,
         "Stripe غير مضبوط على الخادم",
-        "Stripe is not configured. Set STRIPE_SECRET_KEY (or STRIPE_BYPASS_CHECKOUT=true for local testing).",
+        "Stripe is not configured. Set STRIPE_SECRET_KEY, or set STRIPE_BYPASS_CHECKOUT=true to skip payment during closed testing.",
       );
     }
 

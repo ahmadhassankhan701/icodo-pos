@@ -19,6 +19,15 @@ export function stripeBypassEnabled() {
   );
 }
 
+/**
+ * Closed-testing / pilot mode: skip Checkout and mark payment done.
+ * Works even when STRIPE_SECRET_KEY is set (Stripe code stays intact).
+ * Turn off on Vercel when you want real billing: STRIPE_BYPASS_CHECKOUT=false (or remove it).
+ */
+export function shouldBypassCheckout() {
+  return stripeBypassEnabled();
+}
+
 export function appPublicUrl() {
   const raw =
     process.env.APP_PUBLIC_URL ||

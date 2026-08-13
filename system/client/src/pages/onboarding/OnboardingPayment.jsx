@@ -18,6 +18,7 @@ export default function OnboardingPayment() {
   const [submitting, setSubmitting] = useState(false);
   const [boot, setBoot] = useState(true);
   const [currencyLocal, setCurrencyLocal] = useState("SAR");
+  const [paymentBypassEnabled, setPaymentBypassEnabled] = useState(false);
 
   useEffect(() => {
     if (params.get("cancelled") === "1") {
@@ -41,6 +42,7 @@ export default function OnboardingPayment() {
       .then((data) => {
         setPlans(data.onboarding?.plans || []);
         setCurrencyLocal(data.onboarding?.currencyLocal || user?.tax?.currency || "SAR");
+        setPaymentBypassEnabled(Boolean(data.paymentBypassEnabled));
         if (data.onboarding?.selectedPlanInterval) {
           setSelected(data.onboarding.selectedPlanInterval);
         }
@@ -133,6 +135,12 @@ export default function OnboardingPayment() {
 
       <p className="mkt-onboarding-hint">{t("onboarding.chargedInSar")}</p>
 
+      {paymentBypassEnabled ? (
+        <div className="mkt-onboarding-trial" style={{ marginBottom: 12 }}>
+          {t("onboarding.bypassBanner")}
+        </div>
+      ) : null}
+
       {err ? (
         <div className="mkt-error" role="alert">
           {err}
@@ -145,10 +153,14 @@ export default function OnboardingPayment() {
         disabled={submitting}
         onClick={startCheckout}
       >
-        {submitting ? t("onboarding.redirectingStripe") : t("onboarding.payWithStripe")}
+        {submitting
+          ? t("onboarding.redirectingStripe")
+          : paymentBypassEnabled
+            ? t("onboarding.continueWithoutPayment")
+            : t("onboarding.payWithStripe")}
       </button>
       <p className="mkt-onboarding-hint" style={{ marginTop: 12 }}>
-        {t("onboarding.stripeHint")}
+        {paymentBypassEnabled ? t("onboarding.bypassHint") : t("onboarding.stripeHint")}
       </p>
     </OnboardingShell>
   );

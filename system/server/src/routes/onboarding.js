@@ -18,8 +18,8 @@ import {
   appPublicUrl,
   buildCheckoutLineItem,
   getStripe,
-  stripeBypassEnabled,
   stripeConfigured,
+  shouldBypassCheckout,
 } from "../lib/stripe.js";
 import { syncTaxPackFromCountry } from "../lib/taxPacks.js";
 
@@ -67,7 +67,8 @@ router.get("/status", async (req, res, next) => {
     const docs = await documentTypesFor(org.id);
     res.json({
       onboarding: clientOnboardingPayload(org, docs),
-      stripeConfigured: stripeConfigured() || stripeBypassEnabled(),
+      stripeConfigured: stripeConfigured(),
+      paymentBypassEnabled: shouldBypassCheckout(),
       countries: countriesForClient(),
       countryCodes: ONBOARDING_COUNTRY_CODES,
     });
@@ -245,7 +246,7 @@ router.post("/checkout-session", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid plan interval" });
     }
 
-    if (stripeBypassEnabled() && !stripeConfigured()) {
+    if (shouldBypassCheckout()) {
       const updated = await prisma.organization.update({
         where: { id: org.id },
         data: {
@@ -262,7 +263,7 @@ router.post("/checkout-session", async (req, res, next) => {
           amount: PLAN_INTERVALS[planInterval].amount,
           currency: "SAR",
           reference: "BYPASS",
-          note: `Dev bypass checkout (${planInterval})`,
+          note: `Checkout bypass (${planInterval}) — STRIPE_BYPASS_CHECKOUT=true`,
         },
       });
       const docs = await documentTypesFor(org.id);
@@ -277,7 +278,7 @@ router.post("/checkout-session", async (req, res, next) => {
     if (!stripe) {
       return res.status(503).json({
         error:
-          "Stripe is not configured. Set STRIPE_SECRET_KEY on the server (or STRIPE_BYPASS_CHECKOUT=true for local testing).",
+          "Stripe is not configured. Set STRIPE_SECRET_KEY, or set STRIPE_BYPASS_CHECKOUT=true to skip payment during closed testing.",
       });
     }
 
